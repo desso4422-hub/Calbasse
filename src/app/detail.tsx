@@ -165,7 +165,7 @@ export default function Detail() {
         {signale ? (
           <T taille={13} interligne={1.45} style={{ flex: 1 }}>
             <T g={700} taille={13}>
-              Merci, c'est noté.
+              Merci, c’est noté.
             </T>{' '}
             On vérifie ces valeurs avec un nutritionniste et on corrige la base pour tout le monde.
           </T>

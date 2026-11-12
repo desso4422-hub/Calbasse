@@ -1,14 +1,13 @@
 /**
  * Reconnaissance d'un repas à partir d'une photo (et d'un indice texte facultatif).
  *
- * Deux modes :
- * - Serveur : si EXPO_PUBLIC_SCAN_API_URL est défini, la photo est envoyée à ce point d'accès
- *   (qui appelle un modèle de vision et renvoie les aliments reconnus, voir README).
- *   La clé du modèle reste sur le serveur, jamais dans l'app.
+ * - Serveur : si EXPO_PUBLIC_API_URL est défini, la photo (réduite à 1568 px) est envoyée à
+ *   POST {API}/scan. Le serveur (dossier server/) interroge le modèle de vision et ne répond
+ *   qu'avec des aliments de la base. La clé du modèle reste sur le serveur, jamais dans l'app.
  * - Démo : sans serveur, on s'appuie sur l'indice texte, sinon on propose un plat d'exemple.
  */
 import { alimentExiste, aliments, normaliser, trouverAliment } from '../lib/aliments.ts';
-import { chercherPlatParTexte, nommerRepas, trouverPlat, type LigneRepas } from '../lib/plats.ts';
+import { chercherPlatParTexte, nommerRepas, trouverPlat, type Confiance, type LigneRepas } from '../lib/plats.ts';
 
 export type ResultatReconnaissance = {
   nom: string;
@@ -16,40 +15,78 @@ export type ResultatReconnaissance = {
   /** false si on n'a rien pu reconnaître : l'utilisateur doit vérifier */
   reconnu: boolean;
   mode: 'serveur' | 'demo';
+  /** Identifiant du scan côté serveur, pour remonter les corrections */
+  scanId?: string;
+  /** La photo ne montre pas de nourriture */
+  pasUnRepas?: boolean;
+  /** Aliments vus mais absents de la base */
+  inconnus?: { description: string; grammes: number }[];
+  remarque?: string;
 };
 
-const URL_SCAN = process.env.EXPO_PUBLIC_SCAN_API_URL;
+export class ErreurReconnaissance extends Error {}
 
-export const modeReconnaissance: 'serveur' | 'demo' = URL_SCAN ? 'serveur' : 'demo';
+const API = process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, '');
 
-export async function reconnaitreRepas(params: {
-  photoBase64?: string;
-  indice?: string;
-}): Promise<ResultatReconnaissance> {
-  if (URL_SCAN && params.photoBase64) {
-    return reconnaitreSurServeur(URL_SCAN, params.photoBase64, params.indice);
-  }
+export const modeReconnaissance: 'serveur' | 'demo' = API ? 'serveur' : 'demo';
+
+export async function reconnaitreRepas(params: { photoBase64?: string; indice?: string }): Promise<ResultatReconnaissance> {
+  if (API && params.photoBase64) return reconnaitreSurServeur(API, params.photoBase64, params.indice ?? '');
   await new Promise((r) => setTimeout(r, 900));
   return reconnaitreDepuisTexte(params.indice ?? '');
 }
 
-/** Format attendu du serveur : { nom?: string, lignes: { alimentId: string, grammes: number }[] } */
-async function reconnaitreSurServeur(url: string, photoBase64: string, indice?: string): Promise<ResultatReconnaissance> {
-  const reponse = await fetch(url, {
+type ReponseServeur = {
+  scanId: string;
+  estUnRepas: boolean;
+  nom: string;
+  lignes: { alimentId: string; grammes: number; confiance: Confiance; alternatives: string[] }[];
+  inconnus: { description: string; grammes: number }[];
+  remarque: string;
+};
+
+async function reconnaitreSurServeur(api: string, image: string, indice: string): Promise<ResultatReconnaissance> {
+  const controle = new AbortController();
+  const minuterie = setTimeout(() => controle.abort(), 60_000);
+  let reponse: Response;
+  try {
+    reponse = await fetch(`${api}/scan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ image, typeImage: 'image/jpeg', indice }),
+      signal: controle.signal,
+    });
+  } catch {
+    throw new ErreurReconnaissance('Pas de connexion au serveur. Vérifie ton réseau et réessaie.');
+  } finally {
+    clearTimeout(minuterie);
+  }
+  const donnees = (await reponse.json().catch(() => ({}))) as Partial<ReponseServeur> & { erreur?: string };
+  if (!reponse.ok) throw new ErreurReconnaissance(donnees.erreur ?? `Analyse impossible (${reponse.status}).`);
+
+  // On ne garde que des aliments que l'app connaît (le serveur peut être plus récent que l'app).
+  const lignes: LigneRepas[] = (donnees.lignes ?? [])
+    .filter((l) => alimentExiste(l.alimentId) && l.grammes > 0)
+    .map((l) => ({ alimentId: l.alimentId, grammes: l.grammes, confiance: l.confiance, alternatives: (l.alternatives ?? []).filter(alimentExiste) }));
+  const base = { mode: 'serveur' as const, scanId: donnees.scanId, inconnus: donnees.inconnus ?? [], remarque: donnees.remarque ?? '' };
+
+  if (donnees.estUnRepas === false) return { ...base, nom: 'Pas de repas reconnu', lignes: [], reconnu: false, pasUnRepas: true };
+  if (lignes.length === 0) return { ...base, nom: donnees.nom || 'Plat à préciser', lignes: [], reconnu: false };
+  return { ...base, nom: donnees.nom || nommerRepas(lignes.map((l) => trouverAliment(l.alimentId).nom)), lignes, reconnu: true };
+}
+
+/** Remonte au serveur ce que l'utilisateur a corrigé : c'est ce qui permet d'améliorer la reconnaissance. */
+export function envoyerCorrection(scanId: string, proposees: LigneRepas[], finales: LigneRepas[]) {
+  if (!API) return;
+  const resume = (ls: LigneRepas[]) => ls.map((l) => ({ alimentId: l.alimentId, grammes: Math.round(l.grammes) }));
+  const a = resume(proposees);
+  const b = resume(finales);
+  if (JSON.stringify(a) === JSON.stringify(b)) return;
+  fetch(`${API}/corrections`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ image: photoBase64, indice: indice ?? '', alimentsConnus: aliments.map((a) => a.id) }),
-  });
-  if (!reponse.ok) throw new Error(`Le serveur de reconnaissance a répondu ${reponse.status}`);
-  const donnees = (await reponse.json()) as { nom?: string; lignes?: LigneRepas[] };
-  const lignes = (donnees.lignes ?? []).filter((l) => alimentExiste(l.alimentId) && l.grammes > 0);
-  if (lignes.length === 0) return { nom: 'Plat non reconnu', lignes: [], reconnu: false, mode: 'serveur' };
-  return {
-    nom: donnees.nom || nommerRepas(lignes.map((l) => trouverAliment(l.alimentId).nom)),
-    lignes,
-    reconnu: true,
-    mode: 'serveur',
-  };
+    body: JSON.stringify({ scanId, proposees: a, finales: b }),
+  }).catch(() => {});
 }
 
 export function reconnaitreDepuisTexte(indice: string): ResultatReconnaissance {

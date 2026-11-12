@@ -15,7 +15,7 @@ export default function Plats() {
           Plats locaux
         </T>
         <T taille={13} interligne={1.4} couleur={couleurs.encre2}>
-          Chaque plat est chiffré à partir de ses ingrédients, huile comprise. Touche un plat pour l'ajouter à ta journée.
+          Chaque plat est chiffré à partir de ses ingrédients, huile comprise. Touche un plat pour l’ajouter à ta journée.
         </T>
       </View>
       <ListeAliments

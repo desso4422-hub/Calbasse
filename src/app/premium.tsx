@@ -50,7 +50,7 @@ export default function Premium() {
           Tu es Premium
         </T>
         <T taille={15} interligne={1.5} couleur={couleurs.encre2}>
-          Abonnement {etat.abonnement.plan}, valable jusqu'au {fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}. Sans renouvellement automatique : on te préviendra avant la fin.
+          Abonnement {etat.abonnement.plan}, valable jusqu’au {fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}. Sans renouvellement automatique : on te préviendra avant la fin.
         </T>
         <Liste />
       </Ecran>

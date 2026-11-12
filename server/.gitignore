@@ -1,0 +1,6 @@
+node_modules/
+donnees/
+eval/photos/
+eval/resultats/
+eval/etiquettes.json
+.env

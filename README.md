@@ -52,10 +52,11 @@ src/
   app/            écrans (Expo Router)
   components/     T (texte), ui (boutons, segments, cartes), Graphiques (anneau, assiette, logo), Icone
   lib/            logique pure, testée : aliments, plats composés, nutrition, bilan, coach
-  services/       reconnaissance (photo → aliments), paiement (CinetPay)
+  services/       reconnaissance (photo → serveur), photo (réduction), paiement (CinetPay)
   state/          store (données gardées sur le téléphone), brouillon (repas en cours)
   theme.ts        palette et polices des Fondations
 design/           maquettes d'origine et logo
+server/           serveur de reconnaissance (vision Claude) et banc d'évaluation
 ```
 
 Règles de calcul (`src/lib/nutrition.ts`) :
@@ -65,33 +66,29 @@ Règles de calcul (`src/lib/nutrition.ts`) :
 - **Fourchette** affichée : −7 % / +8 % autour de l'estimation.
 - **Objectifs** : Mifflin-St Jeor × activité ; masse +350 kcal et 2 g de protéines/kg, perte −450 kcal et 1,8 g/kg, forme 1,4 g/kg.
 
-## Ce qui est en mode démo
+## Reconnaissance des plats
 
-L'app fonctionne entièrement hors ligne. Deux briques ont besoin d'un serveur pour la vraie version : la clé du modèle de vision et la clé CinetPay ne doivent **jamais** être dans l'app.
+Le serveur de reconnaissance est dans `server/` (voir `server/README.md`). Il utilise la vision de Claude, contrainte à la base d'aliments de l'app : près de 75 aliments et 25 plats d'Afrique de l'Ouest et du Centre, chacun avec ses noms locaux et une description visuelle qui distingue les plats faciles à confondre.
 
-### 1. Reconnaissance des plats
+Dans l'app :
 
-Sans serveur, la reconnaissance utilise l'indice texte saisi au scanner (« garba avec poisson », « riz, sauce graine, poulet ») et, sans indice, propose un plat d'exemple. L'écran Résultat affiche alors « Mode démo ».
+- la photo est réduite à 1568 px puis envoyée à `POST {EXPO_PUBLIC_API_URL}/scan` ;
+- chaque aliment arrive avec une confiance : vert si le modèle est sûr, **orange s'il doute**. Un toucher sur un aliment orange propose les alternatives du modèle, « Autre aliment » ou « Retirer » ;
+- un aliment vu mais absent de la base apparaît en pointillés (« oignons et tomates crus ») et se choisit dans la liste ;
+- une photo sans nourriture ne décompte pas de scan ;
+- quand l'utilisateur corrige, la correction remonte au serveur (`POST /corrections`) pour améliorer la base.
 
-Pour brancher un vrai modèle de vision, définis `EXPO_PUBLIC_SCAN_API_URL` (voir `.env.example`). L'app envoie :
+Sans `EXPO_PUBLIC_API_URL`, l'app reste en **mode démo** : elle s'appuie sur l'indice texte saisi au scanner (« garba », « riz, sauce graine, poulet ») et, sans indice, propose un plat d'exemple.
 
-```json
-POST { "image": "<jpeg base64>", "indice": "texte facultatif", "alimentsConnus": ["attieke", "riz-au-gras", "..."] }
-```
+Pour mesurer la précision sur de vraies photos : `server/eval/LISEZ-MOI.md`.
 
-et attend :
+## Ce qui est encore en mode démo
 
-```json
-{ "nom": "Riz au gras, poulet frit", "lignes": [{ "alimentId": "riz-au-gras", "grammes": 300 }, { "alimentId": "poulet-frit", "grammes": 140 }] }
-```
-
-Le serveur demande au modèle de choisir uniquement parmi `alimentsConnus` et d'estimer les grammes pour une portion moyenne. Les calories sont ensuite calculées par l'app à partir de la base, pas par le modèle.
-
-### 2. Paiement Premium (CinetPay)
+### Paiement Premium (CinetPay)
 
 Sans serveur, « Payer » active l'abonnement localement (étiquette « Mode démo : aucun paiement réel »). Pour le vrai paiement, définis `EXPO_PUBLIC_PAIEMENT_API_URL` : ton serveur crée la transaction CinetPay (Mobile Money ou carte, en XOF), renvoie `{ "urlPaiement": "..." }`, puis confirme l'abonnement à la réception de la notification CinetPay.
 
-### 3. Mode coach
+### Mode coach
 
 Les clients sont des données d'exemple (`src/lib/coach.ts`). Il faudra des comptes et un serveur pour relier coach et clients. Le message vocal est affiché « bientôt ».
 
@@ -107,7 +104,7 @@ Tout est stocké sur le téléphone (AsyncStorage). Dans Profil : « Charger des
 ## Prochaines étapes
 
 1. Remplacer la base d'aliments par des valeurs sourcées, validées par un nutritionniste.
-2. Écrire le serveur de reconnaissance (photo → aliments de la base).
+2. Constituer un jeu de photos réelles étiquetées et mesurer la reconnaissance (`server/eval/`), puis choisir modèle et effort selon la précision et le coût.
 3. Brancher CinetPay côté serveur.
 4. Comptes utilisateurs et synchronisation (nécessaires au mode coach).
 5. Construire les apps avec EAS (`npx eas-cli@latest build`).

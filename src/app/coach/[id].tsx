@@ -51,7 +51,7 @@ export default function CoachCorriger() {
         </View>
         <View style={{ flex: 1, backgroundColor: couleurs.blanc, borderWidth: 1, borderColor: couleurs.traits, borderRadius: 20, paddingVertical: 12, paddingHorizontal: 14, justifyContent: 'center', gap: 4 }}>
           <T g={700} taille={12} couleur={couleurs.terreFoncee}>
-            Estimation de l'IA
+            Estimation de l’IA
           </T>
           <T g={800} taille={15} interligne={1.2}>
             {repas.nom}

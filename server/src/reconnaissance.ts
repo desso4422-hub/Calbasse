@@ -1,0 +1,149 @@
+/**
+ * Reconnaissance d'une assiette avec la vision de Claude.
+ *
+ * Choix qui servent la précision :
+ * - le modèle ne peut répondre qu'avec des identifiants de la base (structured outputs + enum) ;
+ * - chaque aliment arrive avec une description visuelle et les confusions fréquentes ;
+ * - l'indice tapé par l'utilisateur est une information forte ;
+ * - pour chaque aliment, le modèle donne sa confiance et des alternatives, que l'app propose en un geste.
+ * Les calories ne viennent jamais du modèle : l'app les calcule à partir de la base.
+ */
+import type Anthropic from '@anthropic-ai/sdk';
+import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+import { z } from 'zod';
+import { idsAliments, texteCatalogue } from './catalogue.ts';
+
+const Confiance = z.enum(['haute', 'moyenne', 'basse']);
+
+const Composant = z.object({
+  alimentId: z.enum([...idsAliments, 'inconnu']).describe("Identifiant de la base, ou 'inconnu' si l'aliment n'y est pas"),
+  grammes: z.number().describe("Poids estimé de ce qui est dans l'assiette, en grammes"),
+  confiance: Confiance,
+  alternatives: z.array(z.enum(idsAliments)).describe("Jusqu'à 3 autres identifiants plausibles, du plus au moins probable"),
+  description: z.string().describe("Ce que tu vois, en quelques mots (obligatoire si 'inconnu')"),
+});
+
+export const SchemaReponse = z.object({
+  estUnRepas: z.boolean(),
+  nomDuPlat: z.string().describe("Nom courant du plat, tel qu'on le dit en Afrique de l'Ouest et du Centre"),
+  confianceGlobale: Confiance,
+  composants: z.array(Composant),
+  remarque: z.string().describe("Courte remarque utile à l'utilisateur, en français, ou chaîne vide"),
+});
+
+export type ReponseModele = z.infer<typeof SchemaReponse>;
+
+export const CONSIGNES = `Tu es le moteur de reconnaissance de Calbasse, une application de suivi nutritionnel pour l'Afrique de l'Ouest et du Centre. Tu connais très bien les plats du Bénin, du Togo, de Côte d'Ivoire, du Sénégal, du Ghana, du Nigeria, du Cameroun, du Burkina Faso, du Mali et des pays voisins.
+
+À partir de la photo d'un repas (et d'un indice facultatif écrit par l'utilisateur), identifie chaque composant visible et estime son poids.
+
+Règles :
+1. Chaque composant distinct (féculent, sauce, viande ou poisson, accompagnement, boisson) devient une ligne. Choisis l'identifiant de la base qui correspond le mieux, en t'aidant des descriptions « Aspect », qui signalent les confusions fréquentes (attiéké / couscous / gari, akassa / pâte blanche / ablo, igname pilée / foufou / placali, sauce graine / sauce tomate / sauce arachide, riz au gras / riz thiéboudienne…).
+2. Si un composant n'existe pas dans la base, utilise « inconnu » et décris-le. N'invente jamais d'identifiant.
+3. L'indice de l'utilisateur est une information forte : il sait ce qu'il mange. Suis-le quand la photo ne le contredit pas nettement. S'il nomme un plat local, utilise ce nom.
+4. Grammes : estime ce qui est réellement dans l'assiette, pas la mesure habituelle. Repères : une assiette plate standard fait 24 à 26 cm, une louche de sauce pèse environ 80 g, une boule de pâte 150 à 250 g, une cuisse de poulet environ 140 g. Sers-toi des couverts, des mains, des bols et de l'emballage visibles pour l'échelle.
+5. Plat familial ou plateau partagé : estime la portion d'un adulte et dis-le dans la remarque.
+6. Ne compte pas l'huile de cuisson à part : elle est déjà dans les valeurs de la base (l'utilisateur l'ajuste ensuite).
+7. Confiance : « haute » si tu es sûr, « moyenne » si un aliment proche est possible, « basse » si tu devines (photo floue, sauce qui cache tout). Donne alors 1 à 3 alternatives plausibles. Mieux vaut une confiance honnête qu'une fausse certitude : l'utilisateur corrige en un geste.
+8. Si la photo ne montre pas de nourriture, réponds estUnRepas = false et aucune ligne.
+9. Le nom du plat : le nom courant (« Garba », « Thiéboudienne », « Riz au gras, poulet frit », « Pâte rouge, poisson frit »).
+10. La remarque est courte et en français ; laisse-la vide si tu n'as rien d'utile à dire.`;
+
+export type OptionsAnalyse = {
+  modele: string;
+  effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+};
+
+export type LigneReconnue = {
+  alimentId: string;
+  grammes: number;
+  confiance: 'haute' | 'moyenne' | 'basse';
+  alternatives: string[];
+};
+
+export type ResultatScan = {
+  estUnRepas: boolean;
+  nom: string;
+  confiance: 'haute' | 'moyenne' | 'basse';
+  lignes: LigneReconnue[];
+  inconnus: { description: string; grammes: number }[];
+  remarque: string;
+};
+
+export class RefusModele extends Error {}
+export class ReponseIllisible extends Error {}
+
+/** Les types d'image acceptés par l'API. */
+export type TypeImage = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
+
+/** Seule partie du client dont on a besoin : facilite les tests avec un faux client. */
+export type ClientVision = { beta: { messages: { parse: Anthropic['beta']['messages']['parse'] } } };
+
+export function construireRequete(image: string, typeImage: TypeImage, indice: string, options: OptionsAnalyse) {
+  const texteIndice = indice.trim()
+    ? `Indice de l'utilisateur : « ${indice.trim().slice(0, 300)} »`
+    : "Pas d'indice de l'utilisateur.";
+  return {
+    model: options.modele,
+    max_tokens: 16000,
+    betas: ['server-side-fallback-2026-07-01'],
+    // Si le modèle principal décline, l'API relance la même requête sur un modèle de repli.
+    fallbacks: 'default' as const,
+    output_config: { effort: options.effort, format: betaZodOutputFormat(SchemaReponse) },
+    system: [
+      // Consignes + catalogue : identiques à chaque requête, donc mis en cache.
+      { type: 'text' as const, text: `${CONSIGNES}\n\n${texteCatalogue()}`, cache_control: { type: 'ephemeral' as const } },
+    ],
+    messages: [
+      {
+        role: 'user' as const,
+        content: [
+          { type: 'image' as const, source: { type: 'base64' as const, media_type: typeImage, data: image } },
+          { type: 'text' as const, text: `${texteIndice}\nIdentifie les composants de ce repas.` },
+        ],
+      },
+    ],
+  };
+}
+
+export async function analyserRepas(
+  client: ClientVision,
+  image: string,
+  typeImage: TypeImage,
+  indice: string,
+  options: OptionsAnalyse,
+): Promise<{ resultat: ResultatScan; brut: ReponseModele; usage: unknown }> {
+  const reponse = await client.beta.messages.parse(construireRequete(image, typeImage, indice, options));
+  if (reponse.stop_reason === 'refusal') throw new RefusModele('Le modèle a décliné cette image');
+  const brut = reponse.parsed_output;
+  if (!brut) throw new ReponseIllisible(`Réponse non exploitable (stop_reason: ${reponse.stop_reason})`);
+  return { resultat: normaliser(brut), brut, usage: reponse.usage };
+}
+
+/** Nettoie la réponse : grammes plausibles, alternatives sans doublon, fusion des lignes répétées. */
+export function normaliser(r: ReponseModele): ResultatScan {
+  const lignes: LigneReconnue[] = [];
+  const inconnus: ResultatScan['inconnus'] = [];
+  for (const c of r.composants) {
+    const grammes = Math.min(2000, Math.max(5, Math.round(c.grammes / 5) * 5));
+    if (c.alimentId === 'inconnu') {
+      inconnus.push({ description: c.description || 'Aliment non reconnu', grammes });
+      continue;
+    }
+    const alternatives = [...new Set(c.alternatives)].filter((a) => a !== c.alimentId).slice(0, 3);
+    const existante = lignes.find((l) => l.alimentId === c.alimentId);
+    if (existante) {
+      existante.grammes += grammes;
+      continue;
+    }
+    lignes.push({ alimentId: c.alimentId, grammes, confiance: c.confiance, alternatives });
+  }
+  return {
+    estUnRepas: r.estUnRepas && (lignes.length > 0 || inconnus.length > 0),
+    nom: r.nomDuPlat.trim(),
+    confiance: r.confianceGlobale,
+    lignes,
+    inconnus,
+    remarque: r.remarque.trim(),
+  };
+}

@@ -2,13 +2,14 @@ import { CameraView, useCameraPermissions } from 'expo-camera';
 import * as ImagePicker from 'expo-image-picker';
 import { router } from 'expo-router';
 import { useRef, useState } from 'react';
-import { ActivityIndicator, Alert, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, KeyboardAvoidingView, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Assiette } from '../components/Graphiques';
 import { Icone, type NomIcone } from '../components/Icone';
 import { T } from '../components/T';
 import { BoutonRond } from '../components/ui';
-import { reconnaitreRepas } from '../services/reconnaissance';
+import { preparerPhoto } from '../services/photo';
+import { ErreurReconnaissance, modeReconnaissance, reconnaitreRepas } from '../services/reconnaissance';
 import { nouveauBrouillon, useBrouillon } from '../state/brouillon';
 import { estPremium, scansRestants, useStore } from '../state/store';
 import { couleurs, polices } from '../theme';
@@ -29,19 +30,39 @@ export default function Scanner() {
   const restants = scansRestants(etat);
   const premium = estPremium(etat);
 
-  const analyser = async (photo: { uri: string; base64?: string | null }) => {
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const analyser = async (photo: { uri: string; width: number; height: number }) => {
     if (restants <= 0) {
       router.push('/premium');
       return;
     }
     setAnalyse(true);
+    setErreur(null);
     try {
-      const r = await reconnaitreRepas({ photoBase64: photo.base64 ?? undefined, indice });
+      const preparee = modeReconnaissance === 'serveur' ? await preparerPhoto(photo) : { uri: photo.uri, base64: undefined };
+      const r = await reconnaitreRepas({ photoBase64: preparee.base64, indice });
+      if (r.pasUnRepas) {
+        // Pas de nourriture sur la photo : on ne décompte pas le scan.
+        setErreur(r.remarque || "On ne voit pas de repas sur cette photo. Cadre l'assiette entière, vue de dessus.");
+        return;
+      }
       dispatch({ type: 'compterScan' });
-      setBrouillon(nouveauBrouillon({ nom: r.nom, lignes: r.lignes, reconnu: r.reconnu, mode: r.mode, photoUri: photo.uri }));
+      setBrouillon(
+        nouveauBrouillon({
+          nom: r.nom,
+          lignes: r.lignes,
+          reconnu: r.reconnu,
+          mode: r.mode,
+          photoUri: photo.uri,
+          scanId: r.scanId,
+          inconnus: r.inconnus,
+          remarque: r.remarque,
+        }),
+      );
       router.replace('/resultat');
     } catch (e) {
-      Alert.alert('Analyse impossible', "Vérifie ta connexion et réessaie, ou choisis ton plat dans la liste.");
+      setErreur(e instanceof ErreurReconnaissance ? e.message : 'Analyse impossible. Réessaie, ou choisis ton plat dans la liste.');
     } finally {
       setAnalyse(false);
     }
@@ -51,16 +72,16 @@ export default function Scanner() {
     if (restants <= 0) return router.push('/premium');
     if (!camera.current || !pret) return;
     try {
-      const photo = await camera.current.takePictureAsync({ quality: 0.5, base64: true });
+      const photo = await camera.current.takePictureAsync({ quality: 0.8 });
       if (photo) await analyser(photo);
     } catch {
-      Alert.alert('Photo impossible', 'Réessaie dans un instant.');
+      setErreur('Photo impossible. Réessaie dans un instant.');
     }
   };
 
   const galerie = async () => {
     if (restants <= 0) return router.push('/premium');
-    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.5, base64: true, allowsEditing: true, aspect: [1, 1] });
+    const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
     if (!res.canceled && res.assets[0]) await analyser(res.assets[0]);
   };
 
@@ -122,14 +143,14 @@ export default function Scanner() {
           </View>
           <View style={{ backgroundColor: couleurs.nuit2, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 14 }}>
             <T g={600} taille={13} couleur={couleurs.sable}>
-              Cadre l'assiette entière, vue de dessus
+              Cadre l’assiette entière, vue de dessus
             </T>
           </View>
         </View>
 
         <View style={{ marginHorizontal: 25, marginTop: 18, gap: 8 }}>
           <T g={700} taille={13} couleur={couleurs.sable}>
-            Qu'y a-t-il dedans ?{' '}
+            Qu’y a-t-il dedans ?{' '}
             <T g={500} taille={13} couleur={couleurs.traitsFonces}>
               (facultatif)
             </T>
@@ -153,6 +174,15 @@ export default function Scanner() {
             }}
           />
         </View>
+
+        {erreur ? (
+          <View accessibilityLiveRegion="polite" style={{ marginHorizontal: 25, marginTop: 14, flexDirection: 'row', gap: 10, backgroundColor: couleurs.nuit2, borderRadius: 14, padding: 12, alignItems: 'flex-start' }}>
+            <Icone nom="info" taille={18} couleur={couleurs.peche} />
+            <T g={600} taille={13} couleur={couleurs.sable} interligne={1.4} style={{ flex: 1 }}>
+              {erreur}
+            </T>
+          </View>
+        ) : null}
 
         <View style={{ flex: 1, minHeight: 24 }} />
 

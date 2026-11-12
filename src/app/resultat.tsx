@@ -1,13 +1,15 @@
 import { Redirect, router } from 'expo-router';
 import { Image, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { AlimentsReconnus } from '../components/AlimentsReconnus';
 import { Assiette } from '../components/Graphiques';
 import { Icone } from '../components/Icone';
 import { T } from '../components/T';
 import { Bouton, BoutonRond, Segment } from '../components/ui';
 import { trouverAliment } from '../lib/aliments.ts';
 import { arrondirNutriments, formater, fourchette, totalRepas, type Huile, type Portion } from '../lib/nutrition.ts';
-import { lignesEffectives, nomBrouillon, retirerAliment, useBrouillon, versRepas } from '../state/brouillon';
+import { envoyerCorrection } from '../services/reconnaissance';
+import { lignesEffectives, nomBrouillon, useBrouillon, versRepas } from '../state/brouillon';
 import { nomsCreneaux, ordreCreneaux, useStore } from '../state/store';
 import { couleurs } from '../theme';
 
@@ -33,7 +35,9 @@ export default function Resultat() {
       ? 'Mode démo : vérifie bien les aliments, puis ajuste la portion et l’huile.'
       : b.mode === 'manuel'
         ? 'Ajuste la portion et l’huile.'
-        : 'Plat reconnu. Vérifie, puis ajuste la portion et l’huile.';
+        : b.remarque
+          ? b.remarque
+          : 'Plat reconnu. Vérifie, puis ajuste la portion et l’huile.';
 
   const changerCreneau = () => {
     const i = ordreCreneaux.indexOf(b.creneau);
@@ -41,7 +45,9 @@ export default function Resultat() {
   };
 
   const enregistrer = () => {
-    dispatch({ type: 'enregistrerRepas', repas: versRepas(b) });
+    const repas = versRepas(b);
+    if (b.scanId && b.lignesProposees) envoyerCorrection(b.scanId, b.lignesProposees, lignes);
+    dispatch({ type: 'enregistrerRepas', repas });
     setBrouillon(null);
     router.dismissTo('/(onglets)');
   };
@@ -81,32 +87,7 @@ export default function Resultat() {
             </T>
           </View>
 
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-            {b.lignesBase.map((l, i) => (
-              <Pressable
-                key={`${l.alimentId}-${i}`}
-                onLongPress={() => setBrouillon(retirerAliment(b, i))}
-                accessibilityHint="Appui long pour retirer"
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: couleurs.feuilleDouce, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12 }}
-              >
-                <Icone nom="coche" taille={14} couleur={couleurs.feuille} epaisseur={3.2} />
-                <T g={700} taille={13} couleur={couleurs.feuille}>
-                  {trouverAliment(l.alimentId).nom}
-                </T>
-              </Pressable>
-            ))}
-            <Pressable
-              onPress={() => router.push({ pathname: '/choisir', params: { mode: 'ajouter' } })}
-              accessibilityRole="button"
-              accessibilityLabel="Ajouter un aliment"
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, borderWidth: 1.5, borderStyle: 'dashed', borderColor: '#B8A27F', borderRadius: 999, paddingVertical: 6, paddingHorizontal: 12 }}
-            >
-              <Icone nom="plus" taille={14} couleur={couleurs.encre2} epaisseur={3} />
-              <T g={700} taille={13} couleur={couleurs.encre2}>
-                Ajouter
-              </T>
-            </Pressable>
-          </View>
+          <AlimentsReconnus b={b} setBrouillon={setBrouillon} />
 
           {!vide ? (
             <>

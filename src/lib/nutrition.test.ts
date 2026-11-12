@@ -79,7 +79,9 @@ test('recherche tolérante aux accents et aux noms locaux', () => {
 });
 
 test("l'indice texte du scanner retrouve le plat", () => {
-  assert.equal(chercherPlatParTexte('du garba avec poisson braisé')?.id, 'attieke-poisson');
+  assert.equal(chercherPlatParTexte('attiéké avec poisson braisé')?.id, 'attieke-poisson');
+  assert.equal(chercherPlatParTexte('du garba')?.id, 'garba');
+  assert.equal(chercherPlatParTexte('thieb au poisson')?.id, 'thieboudienne');
   assert.equal(chercherPlatParTexte('Riz au gras et poulet')?.id, 'riz-gras-poulet');
   assert.equal(chercherPlatParTexte('rien à voir'), undefined);
 });

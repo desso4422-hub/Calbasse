@@ -47,7 +47,7 @@ export default function CoachClients() {
               {aCorriger.length ? `${aCorriger.length} repas à corriger` : 'Tout est à jour'}
             </T>
             <T taille={13} couleur={couleurs.sableClair}>
-              L'app a déjà estimé. Tu valides ou tu ajustes.
+              L’app a déjà estimé. Tu valides ou tu ajustes.
             </T>
           </View>
         </View>

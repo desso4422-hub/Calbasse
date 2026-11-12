@@ -6,18 +6,22 @@ import { T } from '../components/T';
 import { BoutonRond, Ecran } from '../components/ui';
 import { arrondirNutriments, formater, totalRepas } from '../lib/nutrition.ts';
 import { platsComposes, type LigneRepas } from '../lib/plats.ts';
-import { ajouterAliment, nouveauBrouillon, useBrouillon, type Brouillon } from '../state/brouillon';
+import { trouverAliment } from '../lib/aliments.ts';
+import { ajouterAliment, nouveauBrouillon, remplacerAliment, retirerInconnu, useBrouillon, type Brouillon } from '../state/brouillon';
 import { couleurs } from '../theme';
 
 /**
  * Choisir un plat sans photo.
  * mode=nouveau : démarre un nouveau repas (depuis le scanner ou un jour passé, via ?jour=AAAA-MM-JJ)
- * mode=ajouter : ajoute un aliment au repas en cours
+ * mode=ajouter : ajoute un aliment au repas en cours (&inconnu=i : identifie un aliment non reconnu de la photo)
+ * mode=remplacer&index=i : remplace un aliment proposé par la reconnaissance
  */
 export default function Choisir() {
-  const { mode, jour } = useLocalSearchParams<{ mode?: string; jour?: string }>();
+  const { mode, jour, index, inconnu } = useLocalSearchParams<{ mode?: string; jour?: string; index?: string; inconnu?: string }>();
   const { brouillon, setBrouillon } = useBrouillon();
-  const ajout = mode === 'ajouter' && !!brouillon;
+  const remplacement = mode === 'remplacer' && !!brouillon && index !== undefined && !!brouillon.lignesBase[Number(index)];
+  const ajout = (mode === 'ajouter' || remplacement) && !!brouillon;
+  const descriptionInconnu = inconnu !== undefined ? brouillon?.inconnus?.[Number(inconnu)]?.description : undefined;
 
   const demarrer = (nom: string, lignes: LigneRepas[], nomFixe: boolean) => {
     let b: Brouillon = { ...nouveauBrouillon({ nom, lignes, reconnu: true, mode: 'manuel', creneau: jour ? 'dejeuner' : undefined }), nomFixe };
@@ -31,10 +35,16 @@ export default function Choisir() {
       <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
         <View style={{ gap: 2, flex: 1 }}>
           <T g={800} taille={26} espacement={-0.02} accessibilityRole="header">
-            {ajout ? 'Ajouter un aliment' : 'Choisir un plat'}
+            {remplacement ? 'Remplacer par…' : ajout ? 'Ajouter un aliment' : 'Choisir un plat'}
           </T>
           <T taille={13} couleur={couleurs.encre2}>
-            {ajout ? 'Il sera ajouté à ton repas.' : 'Sans photo, ça ne compte pas dans tes scans.'}
+            {remplacement
+              ? `À la place de : ${trouverAliment(brouillon!.lignesBase[Number(index)].alimentId).nom.toLowerCase()}.`
+              : descriptionInconnu
+                ? `Sur la photo : ${descriptionInconnu}.`
+                : ajout
+                  ? 'Il sera ajouté à ton repas.'
+                  : 'Sans photo, ça ne compte pas dans tes scans.'}
           </T>
         </View>
         <BoutonRond icone="croix" label="Fermer" onPress={() => router.back()} />
@@ -84,8 +94,19 @@ export default function Choisir() {
 
       <ListeAliments
         onChoisir={(a) => {
-          if (ajout && brouillon) {
-            setBrouillon(ajouterAliment(brouillon, a.id));
+          if (remplacement && brouillon) {
+            setBrouillon(remplacerAliment(brouillon, Number(index), a.id));
+            router.back();
+          } else if (ajout && brouillon) {
+            const dejaLa = brouillon.lignesBase.find((l) => l.alimentId === a.id)?.grammes ?? 0;
+            let b = ajouterAliment(brouillon, a.id);
+            // Un aliment « non reconnu » identifié par l'utilisateur garde le poids estimé sur la photo
+            const inc = inconnu !== undefined ? brouillon.inconnus?.[Number(inconnu)] : undefined;
+            if (inc) {
+              const i = b.lignesBase.findIndex((l) => l.alimentId === a.id);
+              b = { ...retirerInconnu(b, Number(inconnu)), lignesBase: b.lignesBase.map((l, j) => (j === i ? { ...l, grammes: dejaLa + inc.grammes } : l)) };
+            }
+            setBrouillon(b);
             router.back();
           } else {
             demarrer(a.nom, [{ alimentId: a.id, grammes: a.uniteG }], false);

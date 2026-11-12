@@ -23,6 +23,13 @@ export type Brouillon = {
   photoUri?: string;
   reconnu: boolean;
   mode: 'serveur' | 'demo' | 'manuel';
+  /** Scan côté serveur : sert à remonter les corrections */
+  scanId?: string;
+  /** Ce que la reconnaissance avait proposé (pour comparer avec ce que l'utilisateur garde) */
+  lignesProposees?: LigneRepas[];
+  /** Aliments vus sur la photo mais absents de la base */
+  inconnus?: { description: string; grammes: number }[];
+  remarque?: string;
 };
 
 type Valeur = {
@@ -50,6 +57,9 @@ export function nouveauBrouillon(p: {
   mode: Brouillon['mode'];
   photoUri?: string;
   creneau?: Creneau;
+  scanId?: string;
+  inconnus?: { description: string; grammes: number }[];
+  remarque?: string;
 }): Brouillon {
   const maintenant = new Date();
   return {
@@ -64,6 +74,10 @@ export function nouveauBrouillon(p: {
     photoUri: p.photoUri,
     reconnu: p.reconnu,
     mode: p.mode,
+    scanId: p.scanId,
+    lignesProposees: p.scanId ? p.lignes : undefined,
+    inconnus: p.inconnus?.length ? p.inconnus : undefined,
+    remarque: p.remarque || undefined,
   };
 }
 
@@ -111,6 +125,23 @@ export function ajouterAliment(b: Brouillon, alimentId: string): Brouillon {
   return { ...b, lignesBase, nomFixe: false };
 }
 
+/** L'utilisateur choisit un autre aliment à la place de celui proposé (même quantité). */
+export function remplacerAliment(b: Brouillon, index: number, alimentId: string): Brouillon {
+  const lignesBase = b.lignesBase.map((l, i) => (i === index ? { alimentId, grammes: l.grammes, confiance: 'haute' as const } : l));
+  return { ...b, lignesBase, nomFixe: false };
+}
+
+/** L'utilisateur confirme un aliment dont la reconnaissance doutait. */
+export function confirmerAliment(b: Brouillon, index: number): Brouillon {
+  return { ...b, lignesBase: b.lignesBase.map((l, i) => (i === index ? { ...l, confiance: 'haute' as const, alternatives: undefined } : l)) };
+}
+
+/** Un aliment inconnu a été identifié par l'utilisateur dans la liste : on le retire des inconnus. */
+export function retirerInconnu(b: Brouillon, index: number): Brouillon {
+  const inconnus = (b.inconnus ?? []).filter((_, i) => i !== index);
+  return { ...b, inconnus: inconnus.length ? inconnus : undefined };
+}
+
 export function retirerAliment(b: Brouillon, index: number): Brouillon {
   return { ...b, lignesBase: b.lignesBase.filter((_, i) => i !== index), nomFixe: false };
 }
@@ -122,7 +153,7 @@ export function versRepas(b: Brouillon): Repas {
     heure: b.heure,
     creneau: b.creneau,
     nom: nomBrouillon(b),
-    lignes: lignesEffectives(b),
+    lignes: lignesEffectives(b).map(({ alimentId, grammes }) => ({ alimentId, grammes })),
     huile: b.huile,
     photoUri: b.photoUri,
   };

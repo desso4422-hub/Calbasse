@@ -1,0 +1,5 @@
+{
+  "garba-maquis-1.jpg": { "aliments": ["attieke", "thon-frit", "piment"] },
+  "amiwo-poulet.jpg": { "aliments": ["pate-rouge", "poulet-frit"], "grammes": { "pate-rouge": 320, "poulet-frit": 150 } },
+  "riz-sauce-graine.jpg": { "indice": "riz sauce graine", "aliments": ["riz-blanc", "sauce-graine", "poisson-fume"] }
+}

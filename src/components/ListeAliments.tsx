@@ -65,7 +65,7 @@ export function ListeAliments({ onChoisir, entete }: { onChoisir: (a: Aliment) =
               Aucun plat trouvé
             </T>
             <T taille={13} couleur={couleurs.encre2} centre>
-              Ce plat manque ? Dis-le-nous, on l'ajoute à la base.
+              Ce plat manque ? Dis-le-nous, on l’ajoute à la base.
             </T>
           </View>
         ) : null}
