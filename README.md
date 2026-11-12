@@ -56,7 +56,7 @@ src/
   state/          store (données gardées sur le téléphone), brouillon (repas en cours)
   theme.ts        palette et polices des Fondations
 design/           maquettes d'origine et logo
-server/           serveur de reconnaissance (vision Claude) et banc d'évaluation
+server/           serveur de reconnaissance (vision Gemini) et banc d'évaluation
 ```
 
 Règles de calcul (`src/lib/nutrition.ts`) :
@@ -68,7 +68,7 @@ Règles de calcul (`src/lib/nutrition.ts`) :
 
 ## Reconnaissance des plats
 
-Le serveur de reconnaissance est dans `server/` (voir `server/README.md`). Il utilise la vision de Claude, contrainte à la base d'aliments de l'app : près de 75 aliments et 25 plats d'Afrique de l'Ouest et du Centre, chacun avec ses noms locaux et une description visuelle qui distingue les plats faciles à confondre.
+Le serveur de reconnaissance est dans `server/` (voir `server/README.md`). Il utilise la vision de Gemini (Google), contrainte à la base d'aliments de l'app : près de 75 aliments et 25 plats d'Afrique de l'Ouest et du Centre, chacun avec ses noms locaux et une description visuelle qui distingue les plats faciles à confondre.
 
 Dans l'app :
 

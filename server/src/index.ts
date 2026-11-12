@@ -1,29 +1,34 @@
 /**
- * Serveur Calbasse : reconnaissance des plats.
+ * Serveur Calbasse : reconnaissance des plats (Gemini).
  *
- *   ANTHROPIC_API_KEY=... npm start
+ *   GEMINI_API_KEY=... npm start
  *
  * Routes :
  *   GET  /sante        → état du serveur
  *   POST /scan         → { image: base64 JPEG/PNG/WebP, typeImage?, indice? } → aliments reconnus
  *   POST /corrections  → { scanId, proposees, finales } → enregistré pour améliorer la reconnaissance
  */
-import Anthropic from '@anthropic-ai/sdk';
+import { ApiError, GoogleGenAI } from '@google/genai';
 import { randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type ServerResponse } from 'node:http';
 import { Journal } from './journal.ts';
-import { analyserRepas, RefusModele, ReponseIllisible, type OptionsAnalyse, type TypeImage } from './reconnaissance.ts';
+import { optionsDepuisEnv } from './config.ts';
+import { analyserRepas, RefusModele, ReponseIllisible, type TypeImage } from './reconnaissance.ts';
 
 const PORT = Number(process.env.PORT ?? 8787);
-const options: OptionsAnalyse = {
-  modele: process.env.CALBASSE_MODELE ?? 'claude-opus-5-5',
-  effort: (process.env.CALBASSE_EFFORT as OptionsAnalyse['effort']) ?? 'medium',
-};
+const options = optionsDepuisEnv();
 const SCANS_PAR_HEURE = Number(process.env.SCANS_PAR_HEURE ?? 60);
 const TAILLE_MAX = 10 * 1024 * 1024; // 10 Mo de JSON (une photo de 1568 px en JPEG fait ~300 Ko)
 const TYPES: TypeImage[] = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 
-const client = new Anthropic();
+if (!process.env.GEMINI_API_KEY) {
+  console.error('GEMINI_API_KEY manquante : crée une clé sur https://aistudio.google.com/apikey');
+  process.exit(1);
+}
+const client = new GoogleGenAI({
+  apiKey: process.env.GEMINI_API_KEY,
+  ...(process.env.GEMINI_BASE_URL ? { httpOptions: { baseUrl: process.env.GEMINI_BASE_URL } } : {}),
+});
 const journal = new Journal(process.env.DATA_DIR ?? './donnees', process.env.GARDER_PHOTOS === '1');
 
 // Limite simple par adresse IP (en mémoire). Derrière un proxy, mets-la plutôt au niveau du proxy.
@@ -78,15 +83,15 @@ async function scan(req: IncomingMessage, res: ServerResponse) {
   const debut = Date.now();
   try {
     const { resultat, brut, usage } = await analyserRepas(client, image, typeImage, indice, options);
-    await journal.scan(scanId, { indice, modele: options.modele, effort: options.effort, dureeMs: Date.now() - debut, brut, usage }, image).catch(() => {});
+    await journal.scan(scanId, { indice, modele: options.modele, reflexion: options.reflexion ?? 'défaut', dureeMs: Date.now() - debut, brut, usage }, image).catch(() => {});
     return repondre(res, 200, { scanId, ...resultat });
   } catch (e) {
     await journal.scan(scanId, { indice, erreur: String(e) }).catch(() => {});
     if (e instanceof RefusModele) return repondre(res, 422, { erreur: "Cette photo n'a pas pu être analysée." });
     if (e instanceof ReponseIllisible) return repondre(res, 502, { erreur: 'Analyse incomplète, réessaie.' });
-    if (e instanceof Anthropic.RateLimitError) return repondre(res, 503, { erreur: 'Service très demandé, réessaie dans un instant.' });
-    if (e instanceof Anthropic.APIError) {
-      console.error(`Erreur API ${e.status}:`, e.message);
+    if (e instanceof ApiError && e.status === 429) return repondre(res, 503, { erreur: 'Service très demandé, réessaie dans un instant.' });
+    if (e instanceof ApiError) {
+      console.error(`Erreur API Gemini ${e.status}:`, e.message);
       return repondre(res, 502, { erreur: 'Analyse indisponible pour le moment.' });
     }
     console.error(e);
@@ -108,10 +113,10 @@ async function corrections(req: IncomingMessage, res: ServerResponse) {
 const serveur = createServer((req, res) => {
   const url = req.url?.split('?')[0];
   if (req.method === 'OPTIONS') return repondre(res, 204, {});
-  if (req.method === 'GET' && url === '/sante') return repondre(res, 200, { ok: true, modele: options.modele, effort: options.effort });
+  if (req.method === 'GET' && url === '/sante') return repondre(res, 200, { ok: true, modele: options.modele, reflexion: options.reflexion ?? 'défaut' });
   if (req.method === 'POST' && url === '/scan') return void scan(req, res);
   if (req.method === 'POST' && url === '/corrections') return void corrections(req, res);
   repondre(res, 404, { erreur: 'Route inconnue.' });
 });
 
-serveur.listen(PORT, () => console.log(`Calbasse : serveur prêt sur le port ${PORT} (${options.modele}, effort ${options.effort})`));
+serveur.listen(PORT, () => console.log(`Calbasse : serveur prêt sur le port ${PORT} (${options.modele}, réflexion ${options.reflexion ?? 'par défaut'})`));

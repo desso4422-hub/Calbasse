@@ -1,15 +1,15 @@
 /**
- * Reconnaissance d'une assiette avec la vision de Claude.
+ * Reconnaissance d'une assiette avec Gemini (Google).
  *
  * Choix qui servent la précision :
- * - le modèle ne peut répondre qu'avec des identifiants de la base (structured outputs + enum) ;
+ * - le modèle ne peut répondre qu'avec des identifiants de la base (sortie JSON contrainte + enum),
+ *   et la réponse est revalidée ici avant d'être utilisée ;
  * - chaque aliment arrive avec une description visuelle et les confusions fréquentes ;
  * - l'indice tapé par l'utilisateur est une information forte ;
  * - pour chaque aliment, le modèle donne sa confiance et des alternatives, que l'app propose en un geste.
  * Les calories ne viennent jamais du modèle : l'app les calcule à partir de la base.
  */
-import type Anthropic from '@anthropic-ai/sdk';
-import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
+import { FinishReason, ThinkingLevel, type GenerateContentParameters, type GenerateContentResponse } from '@google/genai';
 import { z } from 'zod';
 import { idsAliments, texteCatalogue } from './catalogue.ts';
 
@@ -49,9 +49,12 @@ Règles :
 9. Le nom du plat : le nom courant (« Garba », « Thiéboudienne », « Riz au gras, poulet frit », « Pâte rouge, poisson frit »).
 10. La remarque est courte et en français ; laisse-la vide si tu n'as rien d'utile à dire.`;
 
+export type NiveauReflexion = 'minimal' | 'low' | 'medium' | 'high';
+
 export type OptionsAnalyse = {
   modele: string;
-  effort: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+  /** Niveau de réflexion du modèle. Absent : la valeur par défaut du modèle. */
+  reflexion?: NiveauReflexion;
 };
 
 export type LigneReconnue = {
@@ -73,36 +76,49 @@ export type ResultatScan = {
 export class RefusModele extends Error {}
 export class ReponseIllisible extends Error {}
 
-/** Les types d'image acceptés par l'API. */
+/** Les types d'image acceptés. */
 export type TypeImage = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 
 /** Seule partie du client dont on a besoin : facilite les tests avec un faux client. */
-export type ClientVision = { beta: { messages: { parse: Anthropic['beta']['messages']['parse'] } } };
+export type ClientVision = { models: { generateContent: (p: GenerateContentParameters) => Promise<GenerateContentResponse> } };
 
-export function construireRequete(image: string, typeImage: TypeImage, indice: string, options: OptionsAnalyse) {
+const niveaux: Record<NiveauReflexion, ThinkingLevel> = {
+  minimal: ThinkingLevel.MINIMAL,
+  low: ThinkingLevel.LOW,
+  medium: ThinkingLevel.MEDIUM,
+  high: ThinkingLevel.HIGH,
+};
+
+/** Schéma JSON envoyé à Gemini (calculé une fois : identique à chaque requête). */
+export const schemaJson = (() => {
+  const { $schema: _, ...schema } = z.toJSONSchema(SchemaReponse);
+  return schema;
+})();
+
+export function construireRequete(image: string, typeImage: TypeImage, indice: string, options: OptionsAnalyse): GenerateContentParameters {
   const texteIndice = indice.trim()
     ? `Indice de l'utilisateur : « ${indice.trim().slice(0, 300)} »`
     : "Pas d'indice de l'utilisateur.";
   return {
     model: options.modele,
-    max_tokens: 16000,
-    betas: ['server-side-fallback-2026-07-01'],
-    // Si le modèle principal décline, l'API relance la même requête sur un modèle de repli.
-    fallbacks: 'default' as const,
-    output_config: { effort: options.effort, format: betaZodOutputFormat(SchemaReponse) },
-    system: [
-      // Consignes + catalogue : identiques à chaque requête, donc mis en cache.
-      { type: 'text' as const, text: `${CONSIGNES}\n\n${texteCatalogue()}`, cache_control: { type: 'ephemeral' as const } },
-    ],
-    messages: [
+    contents: [
       {
-        role: 'user' as const,
-        content: [
-          { type: 'image' as const, source: { type: 'base64' as const, media_type: typeImage, data: image } },
-          { type: 'text' as const, text: `${texteIndice}\nIdentifie les composants de ce repas.` },
+        role: 'user',
+        parts: [
+          { inlineData: { mimeType: typeImage, data: image } },
+          { text: `${texteIndice}\nIdentifie les composants de ce repas.` },
         ],
       },
     ],
+    config: {
+      // Consignes + catalogue en premier et identiques à chaque requête : Gemini peut les mettre
+      // en cache automatiquement (cache implicite), ce qui réduit le coût.
+      systemInstruction: `${CONSIGNES}\n\n${texteCatalogue()}`,
+      responseMimeType: 'application/json',
+      responseJsonSchema: schemaJson,
+      maxOutputTokens: 8192,
+      ...(options.reflexion ? { thinkingConfig: { thinkingLevel: niveaux[options.reflexion] } } : {}),
+    },
   };
 }
 
@@ -113,11 +129,23 @@ export async function analyserRepas(
   indice: string,
   options: OptionsAnalyse,
 ): Promise<{ resultat: ResultatScan; brut: ReponseModele; usage: unknown }> {
-  const reponse = await client.beta.messages.parse(construireRequete(image, typeImage, indice, options));
-  if (reponse.stop_reason === 'refusal') throw new RefusModele('Le modèle a décliné cette image');
-  const brut = reponse.parsed_output;
-  if (!brut) throw new ReponseIllisible(`Réponse non exploitable (stop_reason: ${reponse.stop_reason})`);
-  return { resultat: normaliser(brut), brut, usage: reponse.usage };
+  const reponse = await client.models.generateContent(construireRequete(image, typeImage, indice, options));
+  const fin = reponse.candidates?.[0]?.finishReason;
+  if (reponse.promptFeedback?.blockReason || fin === FinishReason.SAFETY || fin === FinishReason.PROHIBITED_CONTENT) {
+    throw new RefusModele('Le modèle a décliné cette image');
+  }
+  const texte = reponse.text;
+  if (!texte) throw new ReponseIllisible(`Réponse vide (fin : ${fin ?? 'inconnue'})`);
+  let json: unknown;
+  try {
+    json = JSON.parse(texte);
+  } catch {
+    throw new ReponseIllisible(`Réponse non exploitable (fin : ${fin ?? 'inconnue'})`);
+  }
+  // Gemini suit le schéma, mais on revalide : un identifiant hors base ne doit jamais passer.
+  const brut = SchemaReponse.safeParse(json);
+  if (!brut.success) throw new ReponseIllisible('Réponse non conforme au schéma');
+  return { resultat: normaliser(brut.data), brut: brut.data, usage: reponse.usageMetadata };
 }
 
 /** Nettoie la réponse : grammes plausibles, alternatives sans doublon, fusion des lignes répétées. */

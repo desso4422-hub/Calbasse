@@ -2,22 +2,24 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { idsAliments, texteCatalogue } from './catalogue.ts';
-import { analyserRepas, construireRequete, normaliser, RefusModele, type ClientVision, type ReponseModele } from './reconnaissance.ts';
+import type { GenerateContentResponse } from '@google/genai';
+import { optionsDepuisEnv } from './config.ts';
+import { analyserRepas, construireRequete, normaliser, RefusModele, schemaJson, type ClientVision, type ReponseModele } from './reconnaissance.ts';
 
-const options = { modele: 'claude-opus-5-5', effort: 'medium' as const };
+const options = { modele: 'gemini-3.8-flash' };
 
-function fauxClient(reponse: { stop_reason: string; parsed_output: ReponseModele | null }, appels: unknown[] = []): ClientVision {
+function fauxClient(reponse: Partial<GenerateContentResponse> & { text?: string }, appels: unknown[] = []): ClientVision {
   return {
-    beta: {
-      messages: {
-        parse: (async (params: unknown) => {
-          appels.push(params);
-          return { ...reponse, usage: {} };
-        }) as unknown as ClientVision['beta']['messages']['parse'],
+    models: {
+      generateContent: async (params) => {
+        appels.push(params);
+        return reponse as GenerateContentResponse;
       },
     },
   };
 }
+
+const reponseOk = (r: ReponseModele) => ({ text: JSON.stringify(r), candidates: [{ finishReason: 'STOP' }] }) as never;
 
 const garba: ReponseModele = {
   estUnRepas: true,
@@ -43,18 +45,31 @@ test('le catalogue est stable (cache de prompt)', () => {
   assert.equal(texteCatalogue(), texteCatalogue());
 });
 
-test("la requête : image, indice, catalogue en cache, repli en cas de refus", () => {
+test('la requête : image, indice, consignes et catalogue, sortie JSON contrainte', () => {
   const r = construireRequete('QUJD', 'image/jpeg', '  du garba bien pimenté ', options);
-  assert.equal(r.model, 'claude-opus-5-5');
-  assert.equal(r.fallbacks, 'default');
-  assert.deepEqual(r.betas, ['server-side-fallback-2026-07-01']);
-  assert.equal(r.output_config.effort, 'medium');
-  assert.deepEqual(r.system[0].cache_control, { type: 'ephemeral' });
-  const [image, texte] = r.messages[0].content;
-  assert.equal(image.type, 'image');
-  assert.ok(texte.type === 'text' && texte.text.includes('« du garba bien pimenté »'));
-  // Rien de variable dans le prompt système
-  assert.equal(construireRequete('X', 'image/png', 'autre', options).system[0].text, r.system[0].text);
+  assert.equal(r.model, 'gemini-3.8-flash');
+  const parts = (r.contents as { parts: { inlineData?: { mimeType: string; data: string }; text?: string }[] }[])[0].parts;
+  assert.deepEqual(parts[0].inlineData, { mimeType: 'image/jpeg', data: 'QUJD' });
+  assert.ok(parts[1].text?.includes('« du garba bien pimenté »'));
+  assert.equal(r.config?.responseMimeType, 'application/json');
+  assert.equal(r.config?.responseJsonSchema, schemaJson);
+  assert.equal(r.config?.thinkingConfig, undefined);
+  assert.ok(String(r.config?.systemInstruction).includes('- attieke — Attiéké'));
+  // Rien de variable dans les consignes (cache implicite de Gemini)
+  assert.equal(construireRequete('X', 'image/png', 'autre', options).config?.systemInstruction, r.config?.systemInstruction);
+});
+
+test('le schéma JSON est autonome (pas de $ref) et limite les identifiants à la base', () => {
+  const s = JSON.stringify(schemaJson);
+  assert.ok(!s.includes('$ref') && !s.includes('$schema'));
+  assert.ok(s.includes('"inconnu"'));
+});
+
+test('réglages : modèle et niveau de réflexion depuis les variables', () => {
+  assert.deepEqual(optionsDepuisEnv({}), { modele: 'gemini-3.8-flash', reflexion: undefined });
+  assert.deepEqual(optionsDepuisEnv({ GEMINI_MODELE: 'gemini-flash-lite-latest', GEMINI_REFLEXION: 'LOW' }), { modele: 'gemini-flash-lite-latest', reflexion: 'low' });
+  assert.equal(optionsDepuisEnv({ GEMINI_REFLEXION: 'n importe quoi' }).reflexion, undefined);
+  assert.deepEqual(construireRequete('X', 'image/jpeg', '', { modele: 'm', reflexion: 'low' }).config?.thinkingConfig, { thinkingLevel: 'LOW' });
 });
 
 test('normalisation : grammes arrondis, alternatives propres, inconnus à part', () => {
@@ -86,12 +101,16 @@ test("pas un repas : l'app le sait", () => {
 
 test('analyse de bout en bout avec un faux client', async () => {
   const appels: unknown[] = [];
-  const { resultat } = await analyserRepas(fauxClient({ stop_reason: 'end_turn', parsed_output: garba }, appels), 'QUJD', 'image/jpeg', '', options);
+  const { resultat } = await analyserRepas(fauxClient(reponseOk(garba), appels), 'QUJD', 'image/jpeg', '', options);
   assert.equal(appels.length, 1);
   assert.equal(resultat.lignes.length, 2);
 });
 
-test('refus du modèle et réponse illisible', async () => {
-  await assert.rejects(analyserRepas(fauxClient({ stop_reason: 'refusal', parsed_output: null }), 'X', 'image/jpeg', '', options), RefusModele);
-  await assert.rejects(analyserRepas(fauxClient({ stop_reason: 'max_tokens', parsed_output: null }), 'X', 'image/jpeg', '', options), /non exploitable/);
+test('refus, réponse vide, JSON cassé, identifiant hors base', async () => {
+  await assert.rejects(analyserRepas(fauxClient({ promptFeedback: { blockReason: 'SAFETY' } } as never), 'X', 'image/jpeg', '', options), RefusModele);
+  await assert.rejects(analyserRepas(fauxClient({ candidates: [{ finishReason: 'SAFETY' }] } as never), 'X', 'image/jpeg', '', options), RefusModele);
+  await assert.rejects(analyserRepas(fauxClient({ text: '', candidates: [{ finishReason: 'MAX_TOKENS' }] } as never), 'X', 'image/jpeg', '', options), /vide/);
+  await assert.rejects(analyserRepas(fauxClient({ text: '{"estUnRepas": tr', candidates: [{ finishReason: 'MAX_TOKENS' }] } as never), 'X', 'image/jpeg', '', options), /non exploitable/);
+  const invente = { ...garba, composants: [{ ...garba.composants[0], alimentId: 'pizza' }] };
+  await assert.rejects(analyserRepas(fauxClient({ text: JSON.stringify(invente) } as never), 'X', 'image/jpeg', '', options), /non conforme/);
 });
