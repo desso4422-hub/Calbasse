@@ -1,0 +1,59 @@
+{
+  "expo": {
+    "name": "Calbasse",
+    "slug": "calbasse",
+    "scheme": "calbasse",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FBF5EA",
+    "ios": {
+      "supportsTablet": false,
+      "bundleIdentifier": "app.calbasse",
+      "infoPlist": {
+        "CFBundleDevelopmentRegion": "fr"
+      }
+    },
+    "android": {
+      "package": "app.calbasse",
+      "adaptiveIcon": {
+        "backgroundColor": "#FBF5EA",
+        "foregroundImage": "./assets/android-icon-foreground.png"
+      },
+      "predictiveBackGestureEnabled": false
+    },
+    "web": {
+      "favicon": "./assets/favicon.png",
+      "output": "single"
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "backgroundColor": "#FBF5EA"
+        }
+      ],
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Calbasse utilise l'appareil photo pour reconnaître ton plat et estimer ses calories.",
+          "recordAudioAndroid": false
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "Calbasse ouvre ta galerie pour analyser la photo d'un repas."
+        }
+      ]
+    ],
+    "experiments": {
+      "typedRoutes": false
+    }
+  }
+}
