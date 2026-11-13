@@ -19,7 +19,7 @@ npm install
 GEMINI_API_KEY=... npm start
 ```
 
-Crée la clé sur [Google AI Studio](https://aistudio.google.com/apikey). Puis, dans l'app, mets `EXPO_PUBLIC_API_URL=http://<adresse-de-ta-machine>:8787` dans `.env.local` et relance `npx expo start`. Sur un téléphone, utilise l'adresse IP locale de ton ordinateur, pas `localhost`.
+Crée la clé sur [Google AI Studio](https://aistudio.google.com/apikey). Puis, dans l'app, lance `EXPO_PUBLIC_API_URL=auto npx expo start` : en développement, l'app retrouve seule l'adresse de ton ordinateur (le téléphone doit être sur le même Wi-Fi). En production, mets l'adresse HTTPS du serveur.
 
 Réglages : voir `.env.example`. Node 22.13 ou plus récent (le serveur s'exécute directement en TypeScript et utilise `node:sqlite`).
 

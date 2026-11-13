@@ -7,9 +7,21 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
+import Constants from 'expo-constants';
 import { Platform } from 'react-native';
 
-export const API = process.env.EXPO_PUBLIC_API_URL?.replace(/\/+$/, '');
+/**
+ * Adresse du serveur. « auto » (développement) : le serveur tourne sur le même ordinateur que
+ * `npx expo start`, sur le port 8787 ; l'app retrouve l'adresse de cet ordinateur toute seule.
+ */
+function adresseServeur(): string | undefined {
+  const brut = process.env.EXPO_PUBLIC_API_URL?.trim();
+  if (brut !== 'auto') return brut ? brut.replace(/\/+$/, '') : undefined;
+  const hote = Constants.expoConfig?.hostUri?.split(':')[0] ?? (typeof window !== 'undefined' ? window.location?.hostname : undefined);
+  return hote ? `http://${hote}:8787` : undefined;
+}
+
+export const API = adresseServeur();
 export const serveurConfigure = !!API;
 
 const CLE_JETON = 'calbasse.jeton';
