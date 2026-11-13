@@ -41,6 +41,14 @@ Réglages : voir `.env.example`. Node 22.13 ou plus récent (le serveur s'exécu
 
 Le jeton s'envoie dans l'en-tête `Authorization: Bearer <jeton>`. Seule son empreinte SHA-256 est stockée.
 
+Pour essayer la reconnaissance sur tes propres photos, sans lancer l'app :
+
+```bash
+npm run essai -- photo1.jpg photo2.jpg --indice "garba"
+```
+
+Le script affiche les aliments reconnus, les calories calculées, la durée et les tokens consommés (pour estimer le coût par scan). La clé vient de `GEMINI_API_KEY`, ou d'un secret réseau de l'environnement cloud (hôte `generativelanguage.googleapis.com`, en-tête `x-goog-api-key`), que le proxy injecte dans les requêtes.
+
 ```bash
 npm test
 ```

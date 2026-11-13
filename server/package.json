@@ -8,7 +8,8 @@
     "start": "node --experimental-strip-types src/index.ts",
     "test": "node --experimental-strip-types --test src/*.test.ts eval/*.test.ts",
     "evaluer": "node --experimental-strip-types eval/evaluer.ts",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "essai": "node --experimental-strip-types eval/essai.ts"
   },
   "engines": {
     "node": ">=22.13"
