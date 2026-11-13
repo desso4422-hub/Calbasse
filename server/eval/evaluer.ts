@@ -1,19 +1,18 @@
 /**
  * Évalue la reconnaissance sur un jeu de photos étiquetées.
  *
- *   GEMINI_API_KEY=... npm run evaluer
- *   GEMINI_REFLEXION=low npm run evaluer              # comparer un réglage
- *   GEMINI_MODELE=gemini-flash-lite-latest npm run evaluer
+ *   RODIUMAI_API_KEY=... npm run evaluer
+ *   REFLEXION=low npm run evaluer                          # comparer un réglage
+ *   RODIUMAI_MODELE=google/gemini-2.5-flash npm run evaluer  # comparer un modèle
  *
  * Attend eval/photos/*.jpg|png|webp et eval/etiquettes.json (voir eval/LISEZ-MOI.md).
  * ⚠️ Chaque photo est un appel payant à l'API.
  */
-import { GoogleGenAI } from '@google/genai';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { idsAliments } from '../src/catalogue.ts';
-import { optionsDepuisEnv } from '../src/config.ts';
+import { fournisseurDepuisEnv, optionsDepuisEnv } from '../src/config.ts';
 import { analyserRepas, type ResultatScan, type TypeImage } from '../src/reconnaissance.ts';
 import { noter, resumer, type Etiquette, type NoteScan } from './score.ts';
 
@@ -39,11 +38,9 @@ for (const [photo, e] of Object.entries(etiquettes)) {
   }
 }
 
-if (!process.env.GEMINI_API_KEY) {
-  console.error('GEMINI_API_KEY manquante.');
-  process.exit(1);
-}
-const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY });
+const client =
+  fournisseurDepuisEnv() ??
+  (console.error('Aucune clé : définis RODIUMAI_API_KEY (RodiumAI) ou GEMINI_API_KEY (Gemini).'), process.exit(1));
 const lignes: { photo: string; note: NoteScan; scan?: ResultatScan; erreur?: string; dureeMs: number }[] = [];
 const photos = Object.keys(etiquettes);
 console.log(`${photos.length} photos · ${options.modele} · réflexion ${reglage}\n`);
@@ -84,6 +81,6 @@ Confusions les plus fréquentes :`);
 for (const [c, n] of Object.entries(bilan.confusions).sort((a, b) => b[1] - a[1]).slice(0, 10)) console.log(`  ${n} × ${c}`);
 
 await mkdir(path.join(dossier, 'resultats'), { recursive: true });
-const sortie = path.join(dossier, 'resultats', `${new Date().toISOString().replace(/[:.]/g, '-')}-${options.modele}-${reglage}.json`);
+const sortie = path.join(dossier, 'resultats', `${new Date().toISOString().replace(/[:.]/g, '-')}-${options.modele.replace(/[^\w.-]+/g, "_")}-${reglage}.json`);
 await writeFile(sortie, JSON.stringify({ options, bilan, lignes }, null, 2));
 console.log(`\nDétail : ${path.relative(process.cwd(), sortie)}`);

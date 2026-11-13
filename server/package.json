@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Serveur Calbasse : reconnaissance des plats (Gemini), comptes, quota de scans, paiement CinetPay",
+  "description": "Serveur Calbasse : reconnaissance des plats (Gemini via RodiumAI), comptes, quota de scans, paiement CinetPay",
   "scripts": {
     "start": "node --experimental-strip-types src/index.ts",
     "test": "node --experimental-strip-types --test src/*.test.ts eval/*.test.ts",

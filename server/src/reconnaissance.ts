@@ -9,7 +9,7 @@
  * - pour chaque aliment, le modèle donne sa confiance et des alternatives, que l'app propose en un geste.
  * Les calories ne viennent jamais du modèle : l'app les calcule à partir de la base.
  */
-import { FinishReason, ThinkingLevel, type GenerateContentParameters, type GenerateContentResponse } from '@google/genai';
+import { ApiError, FinishReason, ThinkingLevel, type GenerateContentParameters, type GenerateContentResponse } from '@google/genai';
 import { z } from 'zod';
 import { idsAliments, texteCatalogue } from './catalogue.ts';
 
@@ -76,6 +76,31 @@ export type ResultatScan = {
 export class RefusModele extends Error {}
 export class ReponseIllisible extends Error {}
 
+/** Erreur du service de vision (clé invalide, crédit épuisé, surcharge…), avec son statut HTTP. */
+export class ErreurFournisseur extends Error {
+  readonly statut: number;
+  readonly code?: string;
+  constructor(message: string, statut: number, code?: string) {
+    super(message);
+    this.statut = statut;
+    this.code = code;
+  }
+}
+
+/**
+ * Un service capable de regarder la photo et de répondre en JSON : Gemini en direct, ou une
+ * passerelle comme RodiumAI. Les consignes, le catalogue et la validation restent les mêmes.
+ */
+export type Fournisseur = {
+  nom: string;
+  generer(p: { systeme: string; image: string; typeImage: TypeImage; texte: string; options: OptionsAnalyse }): Promise<{
+    texte: string | null;
+    refus: boolean;
+    fin: string;
+    usage: unknown;
+  }>;
+};
+
 /** Les types d'image acceptés. */
 export type TypeImage = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
 
@@ -95,10 +120,8 @@ export const schemaJson = (() => {
   return schema;
 })();
 
-export function construireRequete(image: string, typeImage: TypeImage, indice: string, options: OptionsAnalyse): GenerateContentParameters {
-  const texteIndice = indice.trim()
-    ? `Indice de l'utilisateur : « ${indice.trim().slice(0, 300)} »`
-    : "Pas d'indice de l'utilisateur.";
+/** Requête Gemini. `texte` : la demande de l'utilisateur (voir texteDemande). */
+export function construireRequete(image: string, typeImage: TypeImage, texte: string, options: OptionsAnalyse): GenerateContentParameters {
   return {
     model: options.modele,
     contents: [
@@ -106,14 +129,14 @@ export function construireRequete(image: string, typeImage: TypeImage, indice: s
         role: 'user',
         parts: [
           { inlineData: { mimeType: typeImage, data: image } },
-          { text: `${texteIndice}\nIdentifie les composants de ce repas.` },
+          { text: texte },
         ],
       },
     ],
     config: {
       // Consignes + catalogue en premier et identiques à chaque requête : Gemini peut les mettre
       // en cache automatiquement (cache implicite), ce qui réduit le coût.
-      systemInstruction: `${CONSIGNES}\n\n${texteCatalogue()}`,
+      systemInstruction: texteSysteme(),
       responseMimeType: 'application/json',
       responseJsonSchema: schemaJson,
       maxOutputTokens: 8192,
@@ -122,30 +145,57 @@ export function construireRequete(image: string, typeImage: TypeImage, indice: s
   };
 }
 
+/** Texte de l'utilisateur envoyé avec la photo */
+export function texteDemande(indice: string): string {
+  const texteIndice = indice.trim() ? `Indice de l'utilisateur : « ${indice.trim().slice(0, 300)} »` : "Pas d'indice de l'utilisateur.";
+  return `${texteIndice}\nIdentifie les composants de ce repas.`;
+}
+
+/** Consignes + catalogue : identiques à chaque requête (cache de prompt chez le fournisseur). */
+export function texteSysteme(): string {
+  return `${CONSIGNES}\n\n${texteCatalogue()}`;
+}
+
+/** Gemini en direct (SDK Google). */
+export function fournisseurGemini(client: ClientVision): Fournisseur {
+  return {
+    nom: 'gemini',
+    async generer({ image, typeImage, texte, options }) {
+      let reponse: GenerateContentResponse;
+      try {
+        reponse = await client.models.generateContent(construireRequete(image, typeImage, texte, options));
+      } catch (e) {
+        if (e instanceof ApiError) throw new ErreurFournisseur(e.message, e.status);
+        throw e;
+      }
+      const fin = reponse.candidates?.[0]?.finishReason;
+      const refus = !!reponse.promptFeedback?.blockReason || fin === FinishReason.SAFETY || fin === FinishReason.PROHIBITED_CONTENT;
+      return { texte: reponse.text ?? null, refus, fin: String(fin ?? 'inconnue'), usage: reponse.usageMetadata };
+    },
+  };
+}
+
 export async function analyserRepas(
-  client: ClientVision,
+  fournisseur: Fournisseur,
   image: string,
   typeImage: TypeImage,
   indice: string,
   options: OptionsAnalyse,
 ): Promise<{ resultat: ResultatScan; brut: ReponseModele; usage: unknown }> {
-  const reponse = await client.models.generateContent(construireRequete(image, typeImage, indice, options));
-  const fin = reponse.candidates?.[0]?.finishReason;
-  if (reponse.promptFeedback?.blockReason || fin === FinishReason.SAFETY || fin === FinishReason.PROHIBITED_CONTENT) {
-    throw new RefusModele('Le modèle a décliné cette image');
-  }
-  const texte = reponse.text;
-  if (!texte) throw new ReponseIllisible(`Réponse vide (fin : ${fin ?? 'inconnue'})`);
+  const r = await fournisseur.generer({ systeme: texteSysteme(), image, typeImage, texte: texteDemande(indice), options });
+  if (r.refus) throw new RefusModele('Le modèle a décliné cette image');
+  if (!r.texte) throw new ReponseIllisible(`Réponse vide (fin : ${r.fin})`);
   let json: unknown;
   try {
-    json = JSON.parse(texte);
+    // Certains modèles entourent le JSON de ```json … ``` : on l'extrait
+    json = JSON.parse(r.texte.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, ''));
   } catch {
-    throw new ReponseIllisible(`Réponse non exploitable (fin : ${fin ?? 'inconnue'})`);
+    throw new ReponseIllisible(`Réponse non exploitable (fin : ${r.fin})`);
   }
-  // Gemini suit le schéma, mais on revalide : un identifiant hors base ne doit jamais passer.
+  // Le modèle suit le schéma, mais on revalide : un identifiant hors base ne doit jamais passer.
   const brut = SchemaReponse.safeParse(json);
   if (!brut.success) throw new ReponseIllisible('Réponse non conforme au schéma');
-  return { resultat: normaliser(brut.data), brut: brut.data, usage: reponse.usageMetadata };
+  return { resultat: normaliser(brut.data), brut: brut.data, usage: r.usage };
 }
 
 /** Nettoie la réponse : grammes plausibles, alternatives sans doublon, fusion des lignes répétées. */

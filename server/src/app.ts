@@ -18,18 +18,17 @@
  *
  * 🔒 = en-tête « Authorization: Bearer <jeton> »
  */
-import { ApiError } from '@google/genai';
 import { randomInt, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { masquerNumero, type Base, type Compte, type Plan } from './base.ts';
 import { creerPaiementCinetPay, ErreurCinetPay, verifierPaiementCinetPay, type ClientHttp, type ConfigCinetPay } from './cinetpay.ts';
 import type { Journal } from './journal.ts';
 import { normaliserNumero, type EnvoyeurSms } from './sms.ts';
-import { analyserRepas, RefusModele, ReponseIllisible, type ClientVision, type OptionsAnalyse, type TypeImage } from './reconnaissance.ts';
+import { analyserRepas, ErreurFournisseur, RefusModele, ReponseIllisible, type Fournisseur, type OptionsAnalyse, type TypeImage } from './reconnaissance.ts';
 
 export type Dependances = {
   base: Base;
-  vision: ClientVision;
+  vision: Fournisseur;
   options: OptionsAnalyse;
   journal: Journal;
   /** null : paiement non configuré (les routes de paiement répondent 503) */
@@ -143,7 +142,7 @@ export function creerApplication(d: Dependances): Server {
     const methode = req.method ?? 'GET';
 
     if (methode === 'OPTIONS') return repondre(res, 204, {});
-    if (methode === 'GET' && chemin === '/sante') return repondre(res, 200, { ok: true, modele: options.modele, paiement: !!d.cinetpay });
+    if (methode === 'GET' && chemin === '/sante') return repondre(res, 200, { ok: true, vision: d.vision.nom, modele: options.modele, paiement: !!d.cinetpay });
 
     // Pages et notifications appelées par CinetPay (sans jeton)
     if (chemin === '/cinetpay/retour') {
@@ -219,10 +218,13 @@ export function creerApplication(d: Dependances): Server {
           await journal.scan(scanId, { compteId: compte.id, cle, indice, erreur: String(e) }).catch(() => {});
           if (e instanceof RefusModele) return { statut: 422, corps: { erreur: "Cette photo n'a pas pu être analysée." } };
           if (e instanceof ReponseIllisible) return { statut: 502, corps: { erreur: 'Analyse incomplète, réessaie.' } };
-          if (e instanceof ApiError && e.status === 429) return { statut: 503, corps: { erreur: 'Service très demandé, réessaie dans un instant.' } };
-          if (e instanceof ApiError) {
-            console.error(`Erreur API Gemini ${e.status}:`, e.message);
-            return { statut: 502, corps: { erreur: 'Analyse indisponible pour le moment.' } };
+          if (e instanceof ErreurFournisseur && (e.statut === 429 || e.statut === 503)) {
+            return { statut: 503, corps: { erreur: 'Service très demandé, réessaie dans un instant.' } };
+          }
+          if (e instanceof ErreurFournisseur) {
+            // 401 : clé invalide ; 402 : crédit épuisé chez le fournisseur → à surveiller de près
+            console.error(`Erreur du service de vision (${d.vision.nom}) ${e.statut}:`, e.message);
+            return { statut: 503, corps: { erreur: 'Analyse indisponible pour le moment.' } };
           }
           console.error(e);
           return { statut: 500, corps: { erreur: 'Erreur interne.' } };

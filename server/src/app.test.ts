@@ -7,7 +7,7 @@ import { creerApplication } from './app.ts';
 import { Base, jourLocal } from './base.ts';
 import type { ClientHttp } from './cinetpay.ts';
 import { Journal } from './journal.ts';
-import type { ClientVision, ReponseModele } from './reconnaissance.ts';
+import { fournisseurGemini, type ClientVision, type ReponseModele } from './reconnaissance.ts';
 
 // ——— Faux services ———
 
@@ -25,7 +25,7 @@ const repas: ReponseModele = {
 const pasUnRepas: ReponseModele = { estUnRepas: false, nomDuPlat: '', confianceGlobale: 'basse', composants: [], remarque: 'Un chat.' };
 let appelsVision = 0;
 let delaiVision = 0;
-const vision: ClientVision = {
+const clientGemini: ClientVision = {
   models: {
     generateContent: async () => {
       appelsVision += 1;
@@ -53,7 +53,7 @@ const dernierCode = (numero: string) => smsEnvoyes.filter((s) => s.numero === nu
 
 const serveur = creerApplication({
   base,
-  vision,
+  vision: fournisseurGemini(clientGemini),
   options: { modele: 'test' },
   journal: new Journal('/tmp/claude-0/calbasse-tests-journal', false),
   cinetpay: { apiKey: 'cle', siteId: '123', urlApi: 'https://cinetpay.exemple/v2', urlPublique: 'https://api.calbasse.exemple' },

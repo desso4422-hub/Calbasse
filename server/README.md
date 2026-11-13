@@ -2,7 +2,7 @@
 
 Trois rôles :
 
-1. **Reconnaissance des plats** : reçoit la photo d'une assiette, demande au modèle de vision Gemini (Google) d'identifier chaque aliment **parmi ceux de la base de l'app** (`src/lib/aliments.ts`), et renvoie les aliments, les grammes estimés, une confiance et des alternatives. Les calories sont calculées par l'app, jamais par le modèle.
+1. **Reconnaissance des plats** : reçoit la photo d'une assiette, demande au modèle de vision (Gemini, via [RodiumAI](https://www.rodiumai.io) ou directement chez Google) d'identifier chaque aliment **parmi ceux de la base de l'app** (`src/lib/aliments.ts`), et renvoie les aliments, les grammes estimés, une confiance et des alternatives. Les calories sont calculées par l'app, jamais par le modèle.
 2. **Comptes et quota de scans** : chaque installation de l'app reçoit un compte anonyme (un jeton gardé dans le stockage sécurisé du téléphone). Le serveur compte les scans : 2 par jour en gratuit et 30 en Premium par défaut, réglables avec `SCANS_GRATUITS` et `SCANS_PREMIUM` (pour les testeurs du MVP, par exemple `SCANS_GRATUITS=10`). Le compteur de l'app n'est qu'un affichage.
 3. **Paiement Premium** avec CinetPay (Mobile Money et carte), vérifié côté serveur.
 
@@ -16,10 +16,12 @@ npm install
 ```
 
 ```bash
-GEMINI_API_KEY=... npm start
+RODIUMAI_API_KEY=rd_sk_... npm start
 ```
 
-Crée la clé sur [Google AI Studio](https://aistudio.google.com/apikey). Puis, dans l'app, lance `EXPO_PUBLIC_API_URL=auto npx expo start` : en développement, l'app retrouve seule l'adresse de ton ordinateur (le téléphone doit être sur le même Wi-Fi). En production, mets l'adresse HTTPS du serveur.
+La clé se crée sur [RodiumAI](https://www.rodiumai.io), qui donne accès à Gemini avec un paiement possible depuis l'Afrique. Pour utiliser Google directement, mets plutôt `GEMINI_API_KEY` (clé « AIza… » de [Google AI Studio](https://aistudio.google.com/apikey)).
+
+Derrière un proxy d'entreprise ou dans un environnement cloud qui impose un proxy, ajoute `NODE_USE_ENV_PROXY=1` : sinon Node ignore `HTTPS_PROXY`. Puis, dans l'app, lance `EXPO_PUBLIC_API_URL=auto npx expo start` : en développement, l'app retrouve seule l'adresse de ton ordinateur (le téléphone doit être sur le même Wi-Fi). En production, mets l'adresse HTTPS du serveur.
 
 Réglages : voir `.env.example`. Node 22.13 ou plus récent (le serveur s'exécute directement en TypeScript et utilise `node:sqlite`).
 
@@ -41,13 +43,13 @@ Réglages : voir `.env.example`. Node 22.13 ou plus récent (le serveur s'exécu
 
 Le jeton s'envoie dans l'en-tête `Authorization: Bearer <jeton>`. Seule son empreinte SHA-256 est stockée.
 
-Pour essayer la reconnaissance sur tes propres photos, sans lancer l'app :
+Pour essayer la reconnaissance sur tes propres photos, sans lancer l'app (avec ta clé dans `RODIUMAI_API_KEY`) :
 
 ```bash
 npm run essai -- photo1.jpg photo2.jpg --indice "garba"
 ```
 
-Le script affiche les aliments reconnus, les calories calculées, la durée et les tokens consommés (pour estimer le coût par scan). La clé vient de `GEMINI_API_KEY`, ou d'un secret réseau de l'environnement cloud (hôte `generativelanguage.googleapis.com`, en-tête `x-goog-api-key`), que le proxy injecte dans les requêtes.
+Le script affiche les aliments reconnus, les calories calculées, la durée et les tokens consommés (pour estimer le coût par scan).
 
 ```bash
 npm test
@@ -70,14 +72,11 @@ Autres choix : les consignes et le catalogue (≈ 7 000 tokens) sont envoyés en
 
 ## Modèle et coût
 
-Par défaut : `gemini-3.8-flash` (le modèle Flash courant d'après le SDK `@google/genai` 3.2.0). Deux réglages, dans `.env` :
+Par défaut : **Gemini 3.1 Flash Lite via RodiumAI** (`google/gemini-3.1-flash-lite`). Réglages dans `.env` : `RODIUMAI_MODELE` (liste et prix : `https://api.rodiumai.io/v1/pricing`) et `REFLEXION` (`minimal`, `low`, `medium` ou `high`).
 
-- `GEMINI_MODELE` : par exemple `gemini-flash-lite-latest`, encore moins cher, si la précision tient ;
-- `GEMINI_REFLEXION` : `minimal`, `low`, `medium` ou `high`. Moins de réflexion = moins cher et plus rapide.
+Premiers chiffres mesurés (5 photos, novembre 2026) : **2 à 3 secondes** par analyse, environ **10 400 tokens en entrée** (consignes + catalogue + photo) et **350 en sortie**. Au tarif RodiumAI de ce modèle (190,9 RODI par million de tokens en entrée, 1 145,3 en sortie), cela fait **environ 2,4 RODI par scan**. Vérifie sur ton tableau de bord RodiumAI la valeur d'un RODI en FCFA et le coût réel (`usage` dans `donnees/scans.jsonl`).
 
-Vérifie les modèles disponibles et leurs prix sur [la page des modèles](https://ai.google.dev/gemini-api/docs/models) et [la page des tarifs](https://ai.google.dev/gemini-api/docs/pricing) : je n'ai pas pu les consulter en écrivant ce serveur. Chaque scan enregistre dans `donnees/scans.jsonl` le nombre de tokens consommés (`usage` : entrée, entrée en cache, sortie, réflexion) : multiplie par les prix de la page des tarifs pour connaître le coût réel par scan, et compare-le aux 2 000 FCFA/mois de Premium et à la limite de 30 scans par jour.
-
-Change de modèle ou de niveau de réflexion seulement après avoir comparé la précision sur tes photos avec `npm run evaluer`.
+Pistes pour réduire encore le coût : `google/gemini-2.5-flash-lite` (environ 3 fois moins cher en entrée), ou un catalogue plus court envoyé au modèle. Ne change de modèle qu'après avoir comparé la précision avec `npm run evaluer` sur les mêmes photos.
 
 ## Numéro de téléphone et récupération de compte
 
@@ -111,6 +110,6 @@ Le XOF couvre l'UEMOA (Bénin, Côte d'Ivoire, Sénégal, Togo, Burkina Faso, Ma
 
 ## Déployer
 
-N'importe quel hébergeur Node (Render, Railway, Fly.io, un VPS…) : `npm install` puis `npm start`, avec `GEMINI_API_KEY` en variable secrète. Mets le serveur derrière HTTPS. Les photos de repas sont des données personnelles : avec l'offre gratuite de l'API Gemini, Google peut utiliser les requêtes pour améliorer ses produits ; vérifie les conditions de Google et passe sur un compte payant avant d'accueillir de vrais utilisateurs. La limite par adresse IP est en mémoire : avec plusieurs instances, déplace-la vers le proxy ou une base partagée. Derrière un proxy (Render, Fly.io, Nginx…), mets `DERRIERE_PROXY=1` pour que les limites par adresse IP voient la vraie adresse.
+N'importe quel hébergeur Node (Render, Railway, Fly.io, un VPS…) : `npm install` puis `npm start`, avec `RODIUMAI_API_KEY` en variable secrète. Mets le serveur derrière HTTPS. Les photos de repas sont des données personnelles : avec l'offre gratuite de l'API Gemini, Google peut utiliser les requêtes pour améliorer ses produits ; vérifie les conditions de Google et passe sur un compte payant avant d'accueillir de vrais utilisateurs. La limite par adresse IP est en mémoire : avec plusieurs instances, déplace-la vers le proxy ou une base partagée. Derrière un proxy (Render, Fly.io, Nginx…), mets `DERRIERE_PROXY=1` pour que les limites par adresse IP voient la vraie adresse.
 
 Limite connue : les comptes sont anonymes. Quelqu'un de déterminé peut en créer plusieurs pour cumuler des scans gratuits ; la limite de comptes créés par adresse IP (`COMPTES_PAR_HEURE`) freine ça. Pour aller plus loin : Play Integrity (Android) et App Attest (iOS). Un utilisateur qui n'a pas vérifié son numéro et réinitialise son téléphone perd son compte : en dernier recours, retrouve son paiement dans la table `paiements` grâce à la référence CinetPay qu'il te donne, et rattache-le à son nouveau compte.

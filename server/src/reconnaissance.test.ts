@@ -4,7 +4,7 @@ import { test } from 'node:test';
 import { idsAliments, texteCatalogue } from './catalogue.ts';
 import type { GenerateContentResponse } from '@google/genai';
 import { optionsDepuisEnv } from './config.ts';
-import { analyserRepas, construireRequete, normaliser, RefusModele, schemaJson, type ClientVision, type ReponseModele } from './reconnaissance.ts';
+import { analyserRepas, construireRequete, fournisseurGemini, texteDemande, normaliser, RefusModele, schemaJson, type ClientVision, type ReponseModele } from './reconnaissance.ts';
 
 const options = { modele: 'gemini-3.8-flash' };
 
@@ -46,7 +46,7 @@ test('le catalogue est stable (cache de prompt)', () => {
 });
 
 test('la requête : image, indice, consignes et catalogue, sortie JSON contrainte', () => {
-  const r = construireRequete('QUJD', 'image/jpeg', '  du garba bien pimenté ', options);
+  const r = construireRequete('QUJD', 'image/jpeg', texteDemande('  du garba bien pimenté '), options);
   assert.equal(r.model, 'gemini-3.8-flash');
   const parts = (r.contents as { parts: { inlineData?: { mimeType: string; data: string }; text?: string }[] }[])[0].parts;
   assert.deepEqual(parts[0].inlineData, { mimeType: 'image/jpeg', data: 'QUJD' });
@@ -101,18 +101,18 @@ test("pas un repas : l'app le sait", () => {
 
 test('analyse de bout en bout avec un faux client', async () => {
   const appels: unknown[] = [];
-  const { resultat } = await analyserRepas(fauxClient(reponseOk(garba), appels), 'QUJD', 'image/jpeg', '', options);
+  const { resultat } = await analyserRepas(fournisseurGemini(fauxClient(reponseOk(garba), appels)), 'QUJD', 'image/jpeg', '', options);
   assert.equal(appels.length, 1);
   assert.equal(resultat.lignes.length, 2);
 });
 
 test('refus, réponse vide, JSON cassé, identifiant hors base', async () => {
-  await assert.rejects(analyserRepas(fauxClient({ promptFeedback: { blockReason: 'SAFETY' } } as never), 'X', 'image/jpeg', '', options), RefusModele);
-  await assert.rejects(analyserRepas(fauxClient({ candidates: [{ finishReason: 'SAFETY' }] } as never), 'X', 'image/jpeg', '', options), RefusModele);
-  await assert.rejects(analyserRepas(fauxClient({ text: '', candidates: [{ finishReason: 'MAX_TOKENS' }] } as never), 'X', 'image/jpeg', '', options), /vide/);
-  await assert.rejects(analyserRepas(fauxClient({ text: '{"estUnRepas": tr', candidates: [{ finishReason: 'MAX_TOKENS' }] } as never), 'X', 'image/jpeg', '', options), /non exploitable/);
+  await assert.rejects(analyserRepas(fournisseurGemini(fauxClient({ promptFeedback: { blockReason: 'SAFETY' } } as never)), 'X', 'image/jpeg', '', options), RefusModele);
+  await assert.rejects(analyserRepas(fournisseurGemini(fauxClient({ candidates: [{ finishReason: 'SAFETY' }] } as never)), 'X', 'image/jpeg', '', options), RefusModele);
+  await assert.rejects(analyserRepas(fournisseurGemini(fauxClient({ text: '', candidates: [{ finishReason: 'MAX_TOKENS' }] } as never)), 'X', 'image/jpeg', '', options), /vide/);
+  await assert.rejects(analyserRepas(fournisseurGemini(fauxClient({ text: '{"estUnRepas": tr', candidates: [{ finishReason: 'MAX_TOKENS' }] } as never)), 'X', 'image/jpeg', '', options), /non exploitable/);
   const invente = { ...garba, composants: [{ ...garba.composants[0], alimentId: 'pizza' }] };
-  await assert.rejects(analyserRepas(fauxClient({ text: JSON.stringify(invente) } as never), 'X', 'image/jpeg', '', options), /non conforme/);
+  await assert.rejects(analyserRepas(fournisseurGemini(fauxClient({ text: JSON.stringify(invente) } as never)), 'X', 'image/jpeg', '', options), /non conforme/);
 });
 
 test('numéros de téléphone', async () => {

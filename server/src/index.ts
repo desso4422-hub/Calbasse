@@ -5,18 +5,18 @@
  *
  * Toutes les variables sont décrites dans .env.example. Les routes sont dans app.ts.
  */
-import { GoogleGenAI } from '@google/genai';
 import path from 'node:path';
 import { creerApplication } from './app.ts';
 import { Base, SCANS_GRATUITS, SCANS_PREMIUM } from './base.ts';
-import { optionsDepuisEnv } from './config.ts';
+import { fournisseurDepuisEnv, optionsDepuisEnv } from './config.ts';
 import { Journal } from './journal.ts';
 import { smsAfricasTalking, smsConsole } from './sms.ts';
 
 const env = process.env;
 
-if (!env.GEMINI_API_KEY) {
-  console.error('GEMINI_API_KEY manquante : crée une clé sur https://aistudio.google.com/apikey');
+const vision = fournisseurDepuisEnv();
+if (!vision) {
+  console.error('Aucune clé de vision : définis RODIUMAI_API_KEY (https://www.rodiumai.io) ou GEMINI_API_KEY (https://aistudio.google.com/apikey).');
   process.exit(1);
 }
 
@@ -46,10 +46,7 @@ const serveur = creerApplication({
     gratuit: Number(env.SCANS_GRATUITS ?? SCANS_GRATUITS),
     premium: Number(env.SCANS_PREMIUM ?? SCANS_PREMIUM),
   }),
-  vision: new GoogleGenAI({
-    apiKey: env.GEMINI_API_KEY,
-    ...(env.GEMINI_BASE_URL ? { httpOptions: { baseUrl: env.GEMINI_BASE_URL } } : {}),
-  }),
+  vision,
   options,
   journal: new Journal(dossier, env.GARDER_PHOTOS === '1'),
   cinetpay,
@@ -61,7 +58,7 @@ const serveur = creerApplication({
 
 const port = Number(env.PORT ?? 8787);
 serveur.listen(port, () => {
-  console.log(`Calbasse : serveur prêt sur le port ${port} (${options.modele}, réflexion ${options.reflexion ?? 'par défaut'})`);
+  console.log(`Calbasse : serveur prêt sur le port ${port} (${vision.nom} · ${options.modele}, réflexion ${options.reflexion ?? 'par défaut'})`);
   if (!sms) console.log('SMS non configurés (FOURNISSEUR_SMS) : pas de récupération de compte par téléphone.');
   if (fournisseurSms === 'console') console.log('⚠️  FOURNISSEUR_SMS=console : les codes sont écrits dans les logs. Réservé au développement.');
   if (!cinetpay) console.log('Paiement CinetPay non configuré (CINETPAY_API_KEY, CINETPAY_SITE_ID, URL_PUBLIQUE).');

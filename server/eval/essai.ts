@@ -6,15 +6,13 @@
  *
  * Affiche, pour chaque photo, les aliments reconnus, les calories calculées par la base de l'app,
  * la durée et les tokens consommés (pour estimer le coût par scan).
- * Clé : GEMINI_API_KEY, ou la clé ajoutée comme secret réseau de l'environnement
- * (le proxy l'injecte dans l'en-tête x-goog-api-key).
+ * Clé : RODIUMAI_API_KEY (RodiumAI) ou GEMINI_API_KEY (Gemini en direct).
  */
-import { GoogleGenAI } from '@google/genai';
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { trouverAliment } from '../../src/lib/aliments.ts';
 import { arrondirNutriments, totalRepas } from '../../src/lib/nutrition.ts';
-import { optionsDepuisEnv } from '../src/config.ts';
+import { fournisseurDepuisEnv, optionsDepuisEnv } from '../src/config.ts';
 import { analyserRepas, type TypeImage } from '../src/reconnaissance.ts';
 
 const args = process.argv.slice(2);
@@ -28,10 +26,11 @@ if (photos.length === 0) {
 
 const types: Record<string, TypeImage> = { '.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp' };
 const options = optionsDepuisEnv();
-// Sans clé locale, une valeur factice : le proxy de l'environnement la remplace par la vraie
-const client = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY || 'cle-injectee-par-le-proxy' });
+const client =
+  fournisseurDepuisEnv() ??
+  (console.error('Aucune clé : définis RODIUMAI_API_KEY (RodiumAI) ou GEMINI_API_KEY (Gemini).'), process.exit(1));
 
-console.log(`Modèle : ${options.modele} · réflexion : ${options.reflexion ?? 'par défaut'}${indice ? ` · indice : « ${indice} »` : ''}\n`);
+console.log(`Service : ${client.nom} · modèle : ${options.modele} · réflexion : ${options.reflexion ?? 'par défaut'}${indice ? ` · indice : « ${indice} »` : ''}\n`);
 
 for (const photo of photos) {
   const debut = Date.now();
@@ -51,12 +50,13 @@ for (const photo of photos) {
     }
     for (const inc of resultat.inconnus) console.log(`   ✗ non reconnu : ${inc.description}, ${inc.grammes} g`);
     if (resultat.remarque) console.log(`   Remarque : ${resultat.remarque}`);
-    const u = usage as { promptTokenCount?: number; cachedContentTokenCount?: number; candidatesTokenCount?: number; thoughtsTokenCount?: number } | undefined;
-    if (u) {
-      console.log(
-        `   Tokens : entrée ${u.promptTokenCount ?? '?'} (dont cache ${u.cachedContentTokenCount ?? 0}), sortie ${u.candidatesTokenCount ?? '?'}, réflexion ${u.thoughtsTokenCount ?? 0}`,
-      );
-    }
+    const u = (usage ?? {}) as Record<string, number | undefined>;
+    const entree = u.promptTokenCount ?? u.prompt_tokens;
+    const sortie = u.candidatesTokenCount ?? u.completion_tokens;
+    const cache = u.cachedContentTokenCount ?? 0;
+    const reflexion = u.thoughtsTokenCount ?? 0;
+    const cout = u.cost_rodi !== undefined ? ` · coût : ${u.cost_rodi} RODI` : '';
+    console.log(`   Tokens : entrée ${entree ?? '?'}${cache ? ` (dont cache ${cache})` : ''}, sortie ${sortie ?? '?'}${reflexion ? `, réflexion ${reflexion}` : ''}${cout}`);
     console.log('');
   } catch (e) {
     console.log(`📷 ${path.basename(photo)} — erreur : ${e instanceof Error ? e.message : e}\n`);

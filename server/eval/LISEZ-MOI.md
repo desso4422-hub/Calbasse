@@ -27,7 +27,7 @@ Le dossier `photos/` n'est pas versionné (voir `.gitignore`). Ne mets que des p
 ## 3. Lancer
 
 ```bash
-GEMINI_API_KEY=... npm run evaluer
+RODIUMAI_API_KEY=... npm run evaluer
 ```
 
 Le script affiche :
@@ -38,7 +38,7 @@ Le script affiche :
 - **Écart médian sur les grammes**.
 - **Confusions fréquentes** : par exemple `attieke → couscous-mil` veut dire qu'on a pris de l'attiéké pour du couscous. Corrige alors les descriptions « Aspect » des deux aliments, puis relance.
 
-Chaque photo est un appel payant. Compare les réglages un par un (`GEMINI_REFLEXION=low`, un autre `GEMINI_MODELE`) sur le même jeu de photos avant de changer la configuration du serveur.
+Chaque photo est un appel payant. Compare les réglages un par un (`REFLEXION=low`, un autre `RODIUMAI_MODELE`) sur le même jeu de photos avant de changer la configuration du serveur.
 
 ## 4. Nourrir le jeu de photos avec l'usage réel
 

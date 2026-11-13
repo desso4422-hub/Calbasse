@@ -82,7 +82,7 @@ Règles de calcul (`src/lib/nutrition.ts`) :
 
 ## Reconnaissance des plats
 
-Le serveur de reconnaissance est dans `server/` (voir `server/README.md`). Il utilise la vision de Gemini (Google), contrainte à la base d'aliments de l'app : près de 75 aliments et 25 plats d'Afrique de l'Ouest et du Centre, chacun avec ses noms locaux et une description visuelle qui distingue les plats faciles à confondre.
+Le serveur de reconnaissance est dans `server/` (voir `server/README.md`). Il utilise la vision de Gemini (via RodiumAI, payable depuis l'Afrique), contrainte à la base d'aliments de l'app : près de 75 aliments et 25 plats d'Afrique de l'Ouest et du Centre, chacun avec ses noms locaux et une description visuelle qui distingue les plats faciles à confondre.
 
 Dans l'app :
 
@@ -121,7 +121,7 @@ Tout est stocké sur le téléphone (AsyncStorage). Dans Profil : « Charger des
 
 Pour le MVP (scan) :
 
-1. Brancher une vraie clé Gemini et mesurer la reconnaissance sur de vraies photos (`server/eval/`), puis ajuster les descriptions des aliments les plus confondus.
+1. Mesurer la reconnaissance sur davantage de vraies photos (`server/eval/`), puis ajuster les descriptions des aliments les plus confondus.
 2. Déployer le serveur (HTTPS) et distribuer l'app aux testeurs (APK Android via EAS).
 3. Remplacer la base d'aliments par des valeurs sourcées, validées par un nutritionniste.
 
