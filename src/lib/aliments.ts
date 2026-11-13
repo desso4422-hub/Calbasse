@@ -99,8 +99,10 @@ export const aliments: Aliment[] = [
     "Pâte de manioc fermentée : boule blanc GRISÂTRE, un peu translucide et collante, odeur de fermentation. Plus grise et plus terne que l'igname pilée, qui est d'un blanc pur et brillant."),
   al('placali', 'Placali', 'cereales', [120, 0.5, 29, 0.2], '1 boule', 250, E, true, ['#EDE8DA', '#CFC7B0'], ['placali', 'placaly'],
     "Pâte de manioc fermentée ivoirienne, très lisse, élastique et luisante, blanc gris, servie dans une assiette creuse avec sauce claire, kopè ou gombo."),
-  al('eba', 'Eba (gari cuit)', 'cereales', [160, 1, 38, 0.3], '1 boule', 200, E, true, ['#EAD39A', '#CDB570'], ['eba', 'gari cuit', 'piron'],
-    "Gari mélangé à l'eau chaude : boule ou rouleau JAUNE vif (gari jaune à l'huile rouge) ou blanc cassé, surface finement GRANULEUSE ou sablée, parfois découpé en tranches ou en boules par 2 ou 3. Servi avec egusi, sauce gombo, sauce feuilles ou viande. Plus jaune et plus granuleux que l'igname pilée ou la pâte blanche ; la pâte rouge est orange-rouge et lisse."),
+  al('eba', 'Eba (gari cuit)', 'cereales', [160, 1, 38, 0.3], '1 boule', 200, E, true, ['#EAD39A', '#CDB570'], ['eba', 'gari cuit', 'piron', 'piron blanc'],
+    "Gari mélangé à l'eau chaude : boule ou rouleau JAUNE vif (gari jaune à l'huile rouge) ou blanc cassé, surface finement GRANULEUSE ou sablée, parfois découpé en tranches ou en boules par 2 ou 3. Servi avec egusi, sauce gombo, sauce feuilles ou viande. Appelé piron au Bénin et au Togo. Plus jaune et plus granuleux que l'igname pilée ou la pâte blanche ; la pâte rouge est orange-rouge et lisse ; le piron rouge, cuit dans la sauce tomate, est orange."),
+  al('piron-rouge', 'Piron rouge', 'cereales', [190, 1.5, 35, 5], '1 boule', 150, E, true, ['#E8A04A', '#C98330'], ['piron rouge', 'gari rouge', 'gari à la sauce', 'eba rouge'],
+    "Gari cuit dans une sauce tomate à l'huile rouge (Bénin, Togo) : boules ou dômes ORANGE à jaune-orangé, surface GRANULEUSE et sablée, souvent servis par 2 ou 3 avec viande de chèvre ou de mouton grillée, oignons, tomate et piment. Plus orange et plus gras que l'eba simple ; la pâte rouge (amiwo) est lisse, sans grains."),
   al('banku', 'Banku', 'cereales', [120, 2, 26, 1], '1 boule', 200, E, true, ['#EFE7D2', '#D6CBAE'], ['banku', 'akple', 'akplé'],
     "Pâte fermentée de maïs et manioc : boule blanc cassé lisse, un peu collante, souvent avec sauce gombo, piment et poisson."),
   al('kenkey', 'Kenkey', 'cereales', [130, 2.5, 28, 1], '1 boule', 200, E, true, ['#E4D7B6', '#C3B38A'], ['kenkey', 'dokounou', 'dokunu', 'komi'],
@@ -165,8 +167,8 @@ export const aliments: Aliment[] = [
     "Bouillon léger et liquide rouge-orangé (tomate, piment), peu gras, avec morceaux de viande ou de poisson, servi dans un bol ou une assiette creuse."),
   al('sauce-yassa', 'Sauce yassa', 'sauces', [110, 1.5, 9, 8], '1 louche', 100, E, true, ['#D9B65C', '#B8963E'], ['yassa', 'sauce oignon', 'sauce yassa'],
     "Oignons émincés fondus au citron et à la moutarde : sauce jaune pâle à dorée, pleine de lamelles d'oignon translucides, parfois avec olives."),
-  al('piment', 'Piment écrasé', 'sauces', [40, 1.5, 5, 2], '1 cuillère', 20, E, true, ['#B3261E', '#8E1C16'], ['piment', 'pili pili', 'shito', 'kpètè piment', 'sauce piment'],
-    "Petite quantité de piment écrasé (rouge ou vert) au bord de l'assiette."),
+  al('piment', 'Piment écrasé', 'sauces', [40, 1.5, 5, 2], '1 cuillère', 20, E, true, ['#B3261E', '#8E1C16'], ['piment', 'pili pili', 'shito', 'kpètè piment', 'sauce piment', 'piment vert', 'sauce verte de piment'],
+    "Piment écrasé ou en sauce, en petite quantité au bord de l'assiette ou dans une coupelle : ROUGE (piment rouge, souvent mélangé à la tomate) ou VERT VIF (piment vert écrasé, purée grumeleuse vert clair). Une petite portion de purée verte vif à côté du plat est du piment vert, pas une sauce feuilles (qui est vert foncé, filandreuse, avec des feuilles hachées et servie en grande quantité)."),
 
   // ——— Viandes et poissons ———
   al('poulet-frit', 'Poulet frit', 'viandes', [236, 20.7, 5.7, 15], '1 cuisse', 140, F, false, ['#8A4519', '#6E3612'], ['poulet frit', 'poulet', 'cuisse de poulet'],
