@@ -50,7 +50,9 @@
         {
           "photosPermission": "Calbasse ouvre ta galerie pour analyser la photo d'un repas."
         }
-      ]
+      ],
+      "expo-web-browser",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": false

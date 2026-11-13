@@ -13,12 +13,14 @@ import { useEffect } from 'react';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BrouillonProvider } from '../state/brouillon';
 import { StoreProvider, useStore } from '../state/store';
+import { useSynchroCompte } from '../state/synchro';
 import { couleurs } from '../theme';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
 function Navigation() {
   const { pret } = useStore();
+  useSynchroCompte();
   const [policesChargees] = useFonts({
     PlusJakartaSans_400Regular,
     PlusJakartaSans_500Medium,

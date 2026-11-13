@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Serveur de reconnaissance des plats de Calbasse (vision Claude)",
+  "description": "Serveur Calbasse : reconnaissance des plats (Gemini), comptes, quota de scans, paiement CinetPay",
   "scripts": {
     "start": "node --experimental-strip-types src/index.ts",
     "test": "node --experimental-strip-types --test src/*.test.ts eval/*.test.ts",
@@ -11,7 +11,7 @@
     "typecheck": "tsc --noEmit"
   },
   "engines": {
-    "node": ">=22.6"
+    "node": ">=22.13"
   },
   "dependencies": {
     "@google/genai": "^3.2.0",

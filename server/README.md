@@ -1,6 +1,12 @@
-# Serveur de reconnaissance Calbasse
+# Serveur Calbasse
 
-Reçoit la photo d'une assiette, demande au modèle de vision Gemini (Google) d'identifier chaque aliment **parmi ceux de la base de l'app** (`src/lib/aliments.ts`), et renvoie les aliments, les grammes estimés, une confiance et des alternatives. Les calories sont calculées par l'app, jamais par le modèle.
+Trois rôles :
+
+1. **Reconnaissance des plats** : reçoit la photo d'une assiette, demande au modèle de vision Gemini (Google) d'identifier chaque aliment **parmi ceux de la base de l'app** (`src/lib/aliments.ts`), et renvoie les aliments, les grammes estimés, une confiance et des alternatives. Les calories sont calculées par l'app, jamais par le modèle.
+2. **Comptes et quota de scans** : chaque installation de l'app reçoit un compte anonyme (un jeton gardé dans le stockage sécurisé du téléphone). Le serveur compte les scans : 2 par jour en gratuit, 30 en Premium. Le compteur de l'app n'est qu'un affichage.
+3. **Paiement Premium** avec CinetPay (Mobile Money et carte), vérifié côté serveur.
+
+Les données (comptes, scans, paiements) sont dans un fichier SQLite, `DATA_DIR/calbasse.db`, géré par Node lui-même (aucune base à installer). Sauvegarde ce fichier régulièrement.
 
 ## Lancer
 
@@ -15,7 +21,23 @@ GEMINI_API_KEY=... npm start
 
 Crée la clé sur [Google AI Studio](https://aistudio.google.com/apikey). Puis, dans l'app, mets `EXPO_PUBLIC_API_URL=http://<adresse-de-ta-machine>:8787` dans `.env.local` et relance `npx expo start`. Sur un téléphone, utilise l'adresse IP locale de ton ordinateur, pas `localhost`.
 
-Réglages : voir `.env.example`. Node 22.6 ou plus récent (le serveur s'exécute directement en TypeScript).
+Réglages : voir `.env.example`. Node 22.13 ou plus récent (le serveur s'exécute directement en TypeScript et utilise `node:sqlite`).
+
+## Routes
+
+| Route | Jeton | Rôle |
+| --- | --- | --- |
+| `GET /sante` | | État du serveur |
+| `POST /comptes` | | Crée un compte anonyme, renvoie son jeton |
+| `GET /compte` | oui | Premium, scans restants, limite du jour |
+| `POST /scan` | oui | Analyse une photo ; `402` si le quota du jour est épuisé |
+| `POST /corrections` | oui | Corrections de l'utilisateur, pour améliorer la base |
+| `POST /paiements` | oui | Crée une transaction CinetPay, renvoie l'adresse de paiement |
+| `GET /paiements/:id` | oui | Statut de la transaction (revérifié auprès de CinetPay) |
+| `POST /cinetpay/notification` | | Notification envoyée par CinetPay |
+| `GET /cinetpay/retour` | | Page affichée après le paiement, avec un lien pour revenir dans l'app |
+
+Le jeton s'envoie dans l'en-tête `Authorization: Bearer <jeton>`. Seule son empreinte SHA-256 est stockée.
 
 ```bash
 npm test
@@ -47,6 +69,24 @@ Vérifie les modèles disponibles et leurs prix sur [la page des modèles](https
 
 Change de modèle ou de niveau de réflexion seulement après avoir comparé la précision sur tes photos avec `npm run evaluer`.
 
+## Paiement CinetPay
+
+1. Crée un compte marchand sur CinetPay et récupère l'**API key** et le **site ID**.
+2. Renseigne `CINETPAY_API_KEY`, `CINETPAY_SITE_ID` et `URL_PUBLIQUE` (l'adresse HTTPS publique du serveur : CinetPay doit pouvoir joindre `URL_PUBLIQUE/cinetpay/notification`).
+3. Parcours : l'app demande `POST /paiements` → le serveur crée la transaction chez CinetPay → l'app ouvre la page CinetPay → l'utilisateur paie (Orange Money, MTN MoMo, Moov, Wave, carte…) → CinetPay notifie le serveur → le serveur **redemande le statut à CinetPay**, vérifie montant et devise (XOF), puis active ou prolonge Premium. L'app vérifie le statut toutes les 5 secondes et à chaque retour au premier plan.
+
+Sécurité : la notification seule n'active jamais rien. Un faux appel à `/cinetpay/notification` ne fait que déclencher une vérification auprès de CinetPay avec la clé du serveur. Une même transaction ne peut prolonger Premium qu'une fois.
+
+⚠️ **À vérifier avant la mise en production.** Ce module a été écrit d'après l'API checkout v2 de CinetPay **sans accès à sa documentation** (le site était bloqué depuis l'environnement de développement). Il a été testé contre une simulation, pas contre CinetPay. Avant d'encaisser :
+
+- relis les noms de champs de `src/cinetpay.ts` avec la documentation actuelle sur docs.cinetpay.com (création : `apikey`, `site_id`, `transaction_id`, `amount`, `currency`, `notify_url`, `return_url`, `channels` ; vérification : `/payment/check`, `code` « 00 » et `data.status` « ACCEPTED ») ;
+- si CinetPay signe ses notifications (en-tête `x-token`), tu peux ajouter cette vérification en plus : elle n'est pas nécessaire puisque le serveur revérifie toujours le statut ;
+- fais quelques vrais paiements de petit montant avec ton compte, et vérifie `donnees/calbasse.db` (table `paiements`).
+
+Le XOF couvre l'UEMOA (Bénin, Côte d'Ivoire, Sénégal, Togo, Burkina Faso, Mali, Niger). Pour le Cameroun (XAF) ou d'autres pays, il faudra adapter la devise et les prix.
+
 ## Déployer
 
-N'importe quel hébergeur Node (Render, Railway, Fly.io, un VPS…) : `npm install` puis `npm start`, avec `GEMINI_API_KEY` en variable secrète. Mets le serveur derrière HTTPS. Les photos de repas sont des données personnelles : avec l'offre gratuite de l'API Gemini, Google peut utiliser les requêtes pour améliorer ses produits ; vérifie les conditions de Google et passe sur un compte payant avant d'accueillir de vrais utilisateurs. La limite par adresse IP est en mémoire : avec plusieurs instances, déplace-la vers le proxy ou une base partagée. Il n'y a pas encore de comptes : n'importe qui connaissant l'adresse peut appeler `/scan`. Il faudra authentifier les appels (compte utilisateur, ou au minimum App Check / Play Integrity) avant d'ouvrir l'app au public.
+N'importe quel hébergeur Node (Render, Railway, Fly.io, un VPS…) : `npm install` puis `npm start`, avec `GEMINI_API_KEY` en variable secrète. Mets le serveur derrière HTTPS. Les photos de repas sont des données personnelles : avec l'offre gratuite de l'API Gemini, Google peut utiliser les requêtes pour améliorer ses produits ; vérifie les conditions de Google et passe sur un compte payant avant d'accueillir de vrais utilisateurs. La limite par adresse IP est en mémoire : avec plusieurs instances, déplace-la vers le proxy ou une base partagée. Derrière un proxy (Render, Fly.io, Nginx…), mets `DERRIERE_PROXY=1` pour que les limites par adresse IP voient la vraie adresse.
+
+Limite connue : les comptes sont anonymes. Quelqu'un de déterminé peut en créer plusieurs pour cumuler des scans gratuits ; la limite de comptes créés par adresse IP (`COMPTES_PAR_HEURE`) freine ça. Pour aller plus loin : Play Integrity (Android) et App Attest (iOS), ou une connexion par numéro de téléphone. Si le téléphone est réinitialisé, le jeton est perdu, et avec lui l'abonnement : prévois une façon de le récupérer (numéro de téléphone, référence de transaction) avant le lancement.

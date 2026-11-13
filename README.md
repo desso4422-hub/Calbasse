@@ -52,11 +52,11 @@ src/
   app/            écrans (Expo Router)
   components/     T (texte), ui (boutons, segments, cartes), Graphiques (anneau, assiette, logo), Icone
   lib/            logique pure, testée : aliments, plats composés, nutrition, bilan, coach
-  services/       reconnaissance (photo → serveur), photo (réduction), paiement (CinetPay)
+  services/       api (compte, jeton), reconnaissance, photo (réduction), paiement (CinetPay)
   state/          store (données gardées sur le téléphone), brouillon (repas en cours)
   theme.ts        palette et polices des Fondations
 design/           maquettes d'origine et logo
-server/           serveur de reconnaissance (vision Gemini) et banc d'évaluation
+server/           serveur : reconnaissance (Gemini), comptes, quota, paiement CinetPay, banc d'évaluation
 ```
 
 Règles de calcul (`src/lib/nutrition.ts`) :
@@ -76,6 +76,7 @@ Dans l'app :
 - chaque aliment arrive avec une confiance : vert si le modèle est sûr, **orange s'il doute**. Un toucher sur un aliment orange propose les alternatives du modèle, « Autre aliment » ou « Retirer » ;
 - un aliment vu mais absent de la base apparaît en pointillés (« oignons et tomates crus ») et se choisit dans la liste ;
 - une photo sans nourriture ne décompte pas de scan ;
+- le quota de scans est compté par le serveur (compte anonyme créé au premier lancement, jeton dans le stockage sécurisé du téléphone) ;
 - quand l'utilisateur corrige, la correction remonte au serveur (`POST /corrections`) pour améliorer la base.
 
 Sans `EXPO_PUBLIC_API_URL`, l'app reste en **mode démo** : elle s'appuie sur l'indice texte saisi au scanner (« garba », « riz, sauce graine, poulet ») et, sans indice, propose un plat d'exemple.
@@ -86,7 +87,7 @@ Pour mesurer la précision sur de vraies photos : `server/eval/LISEZ-MOI.md`.
 
 ### Paiement Premium (CinetPay)
 
-Sans serveur, « Payer » active l'abonnement localement (étiquette « Mode démo : aucun paiement réel »). Pour le vrai paiement, définis `EXPO_PUBLIC_PAIEMENT_API_URL` : ton serveur crée la transaction CinetPay (Mobile Money ou carte, en XOF), renvoie `{ "urlPaiement": "..." }`, puis confirme l'abonnement à la réception de la notification CinetPay.
+Avec un serveur, « Payer » ouvre la page CinetPay (Mobile Money ou carte). Premium s'active quand le serveur a vérifié le paiement auprès de CinetPay (voir `server/README.md`, y compris les points à vérifier avant d'encaisser). Sans serveur, « Payer » active l'abonnement localement (étiquette « Mode démo : aucun paiement réel »).
 
 ### Mode coach
 
@@ -105,6 +106,6 @@ Tout est stocké sur le téléphone (AsyncStorage). Dans Profil : « Charger des
 
 1. Remplacer la base d'aliments par des valeurs sourcées, validées par un nutritionniste.
 2. Constituer un jeu de photos réelles étiquetées et mesurer la reconnaissance (`server/eval/`), puis choisir modèle et effort selon la précision et le coût.
-3. Brancher CinetPay côté serveur.
+3. Vérifier le module CinetPay avec la documentation et de vrais petits paiements.
 4. Comptes utilisateurs et synchronisation (nécessaires au mode coach).
 5. Construire les apps avec EAS (`npx eas-cli@latest build`).

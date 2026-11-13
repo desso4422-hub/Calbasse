@@ -1,12 +1,12 @@
 import { router } from 'expo-router';
-import { useState } from 'react';
-import { View } from 'react-native';
+import { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, AppState, View } from 'react-native';
 import { Logo } from '../components/Graphiques';
 import { Icone } from '../components/Icone';
 import { T } from '../components/T';
 import { Bouton, BoutonRond, Choix, Ecran, Etiquette, PastilleRadio } from '../components/ui';
 import { depuisCle, formater } from '../lib/nutrition.ts';
-import { demarrerPaiement, modePaiement, tarifs } from '../services/paiement';
+import { demarrerPaiement, ErreurPaiement, modePaiement, suivrePaiement, tarifs } from '../services/paiement';
 import { estPremium, SCANS_GRATUITS, SCANS_PREMIUM, useStore } from '../state/store';
 import { couleurs } from '../theme';
 
@@ -20,6 +20,48 @@ export default function Premium() {
   const premium = estPremium(etat);
   const parMois = Math.round(tarifs.annuel.prix / 12);
 
+  // Transaction CinetPay en cours de confirmation
+  const [transaction, setTransaction] = useState<string | null>(null);
+  const [verification, setVerification] = useState(false);
+
+  const verifier = useCallback(async () => {
+    if (!transaction) return;
+    setVerification(true);
+    try {
+      const suivi = await suivrePaiement(transaction);
+      if (suivi.compte) dispatch({ type: 'majCompteServeur', compte: suivi.compte });
+      if (suivi.statut === 'accepte') {
+        setTransaction(null);
+        setMessage(null);
+      } else if (suivi.statut === 'refuse') {
+        setTransaction(null);
+        setMessage('Le paiement n’a pas abouti. Aucun montant n’a été prélevé pour Premium. Tu peux réessayer.');
+      }
+    } catch {
+      // hors ligne : on réessaiera
+    } finally {
+      setVerification(false);
+    }
+  }, [transaction, dispatch]);
+
+  // Tant qu'une transaction attend : on vérifie toutes les 5 s (3 minutes max) et au retour dans l'app
+  useEffect(() => {
+    if (!transaction) return;
+    let essais = 0;
+    const minuterie = setInterval(() => {
+      essais += 1;
+      if (essais > 36) clearInterval(minuterie);
+      else verifier();
+    }, 5000);
+    const abonnement = AppState.addEventListener('change', (e) => e === 'active' && verifier());
+    return () => {
+      clearInterval(minuterie);
+      abonnement.remove();
+    };
+    // verifier change à chaque vérification ; on ne relance l'effet que pour une nouvelle transaction
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [transaction]);
+
   const payer = async () => {
     setEnCours(true);
     setMessage(null);
@@ -29,14 +71,45 @@ export default function Premium() {
         dispatch({ type: 'activerAbonnement', abonnement: issue.abonnement });
         router.back();
       } else {
-        setMessage('Termine le paiement dans la page qui vient de s’ouvrir. Ton abonnement s’activera dès sa confirmation.');
+        setTransaction(issue.transactionId);
       }
-    } catch {
-      setMessage('Le paiement n’a pas pu démarrer. Vérifie ta connexion et réessaie.');
+    } catch (e) {
+      setMessage(e instanceof ErreurPaiement ? e.message : 'Le paiement n’a pas pu démarrer. Vérifie ta connexion et réessaie.');
     } finally {
       setEnCours(false);
     }
   };
+
+  if (transaction && !premium) {
+    return (
+      <Ecran
+        padding={24}
+        bas={
+          <>
+            <Bouton titre="J’ai payé, vérifier" onPress={verifier} chargement={verification} />
+            <Bouton variante="lien" titre="Annuler" onPress={() => setTransaction(null)} />
+          </>
+        }
+      >
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+          <BoutonRond icone="croix" label="Fermer" onPress={() => router.back()} />
+          <Logo />
+        </View>
+        <View style={{ alignItems: 'center', gap: 16, marginTop: 40 }}>
+          <ActivityIndicator size="large" color={couleurs.terreCuite} />
+          <T g={800} taille={24} centre>
+            Paiement en cours de confirmation
+          </T>
+          <T taille={15} interligne={1.5} couleur={couleurs.encre2} centre>
+            Valide le paiement sur ton téléphone (code Mobile Money) ou dans la page CinetPay. Premium s’active tout seul dès que CinetPay le confirme, en général en moins d’une minute.
+          </T>
+          <T g={600} taille={12} couleur={couleurs.encre2} centre>
+            Référence : {transaction}
+          </T>
+        </View>
+      </Ecran>
+    );
+  }
 
   if (premium && etat.abonnement) {
     const fin = depuisCle(etat.abonnement.jusquau);
@@ -50,7 +123,7 @@ export default function Premium() {
           Tu es Premium
         </T>
         <T taille={15} interligne={1.5} couleur={couleurs.encre2}>
-          Abonnement {etat.abonnement.plan}, valable jusqu’au {fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}. Sans renouvellement automatique : on te préviendra avant la fin.
+          Abonnement {etat.abonnement.plan}, valable jusqu’au {fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}. Sans renouvellement automatique : tu pourras le prolonger depuis cet écran.
         </T>
         <Liste />
       </Ecran>

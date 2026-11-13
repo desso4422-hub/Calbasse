@@ -1,0 +1,192 @@
+/// <reference types="node" />
+import assert from 'node:assert/strict';
+import type { AddressInfo } from 'node:net';
+import { after, before, test } from 'node:test';
+import type { GenerateContentResponse } from '@google/genai';
+import { creerApplication } from './app.ts';
+import { Base, jourLocal } from './base.ts';
+import type { ClientHttp } from './cinetpay.ts';
+import { Journal } from './journal.ts';
+import type { ClientVision, ReponseModele } from './reconnaissance.ts';
+
+// ——— Faux services ———
+
+let horloge = new Date('2026-11-13T10:00:00Z');
+const base = new Base(':memory:', 'Africa/Lagos', () => horloge);
+
+let prochaineReponse: ReponseModele;
+const repas: ReponseModele = {
+  estUnRepas: true,
+  nomDuPlat: 'Garba',
+  confianceGlobale: 'haute',
+  composants: [{ alimentId: 'attieke', grammes: 250, confiance: 'haute', alternatives: [], description: '' }],
+  remarque: '',
+};
+const pasUnRepas: ReponseModele = { estUnRepas: false, nomDuPlat: '', confianceGlobale: 'basse', composants: [], remarque: 'Un chat.' };
+const vision: ClientVision = {
+  models: { generateContent: async () => ({ text: JSON.stringify(prochaineReponse), candidates: [{ finishReason: 'STOP' }] }) as unknown as GenerateContentResponse },
+};
+
+/** Faux CinetPay : statut renvoyé par /payment/check, et appels reçus */
+const statutsCinetPay = new Map<string, { status: string; amount: string; currency: string }>();
+const appelsCinetPay: { url: string; corps: Record<string, unknown> }[] = [];
+const httpCinetPay: ClientHttp = async (entree, init) => {
+  const url = String(entree);
+  const corps = JSON.parse(String(init?.body)) as Record<string, unknown>;
+  appelsCinetPay.push({ url, corps });
+  const json = (o: object) => new Response(JSON.stringify(o), { headers: { 'Content-Type': 'application/json' } });
+  if (url.endsWith('/payment')) return json({ code: '201', message: 'CREATED', data: { payment_url: `https://checkout.exemple/${corps.transaction_id}` } });
+  const s = statutsCinetPay.get(String(corps.transaction_id));
+  return json(s ? { code: '00', message: 'SUCCES', data: s } : { code: '662', message: 'WAITING_CUSTOMER_PAYMENT', data: { status: 'PENDING' } });
+};
+
+const serveur = creerApplication({
+  base,
+  vision,
+  options: { modele: 'test' },
+  journal: new Journal('/tmp/claude-0/calbasse-tests-journal', false),
+  cinetpay: { apiKey: 'cle', siteId: '123', urlApi: 'https://cinetpay.exemple/v2', urlPublique: 'https://api.calbasse.exemple' },
+  http: httpCinetPay,
+  comptesParHeure: 1000,
+  requetesParHeure: 1000,
+});
+let racine = '';
+before(async () => {
+  await new Promise<void>((ok) => serveur.listen(0, ok));
+  racine = `http://127.0.0.1:${(serveur.address() as AddressInfo).port}`;
+});
+after(() => {
+  serveur.close();
+  base.fermer();
+});
+
+async function appel(chemin: string, init: { methode?: string; jeton?: string; corps?: unknown; type?: string } = {}) {
+  const r = await fetch(racine + chemin, {
+    method: init.methode ?? (init.corps !== undefined ? 'POST' : 'GET'),
+    headers: {
+      ...(init.jeton ? { Authorization: `Bearer ${init.jeton}` } : {}),
+      'Content-Type': init.type ?? 'application/json',
+    },
+    body: init.corps === undefined ? undefined : typeof init.corps === 'string' ? init.corps : JSON.stringify(init.corps),
+  });
+  const texte = await r.text();
+  let json: Record<string, unknown> = {};
+  try {
+    json = JSON.parse(texte);
+  } catch {
+    /* page HTML */
+  }
+  return { statut: r.status, json, texte };
+}
+
+async function nouveauCompte(): Promise<string> {
+  const r = await appel('/comptes', { corps: {} });
+  assert.equal(r.statut, 201);
+  return r.json.jeton as string;
+}
+
+const photo = { image: 'QUJD', indice: '' };
+
+// ——— Tests ———
+
+test('un compte anonyme, et rien sans jeton', async () => {
+  const r = await appel('/comptes', { corps: {} });
+  assert.equal(r.statut, 201);
+  assert.equal(typeof r.json.jeton, 'string');
+  assert.deepEqual({ premium: r.json.premium, scansRestants: r.json.scansRestants, limite: r.json.limite }, { premium: null, scansRestants: 2, limite: 2 });
+  assert.equal((await appel('/compte')).statut, 401);
+  assert.equal((await appel('/compte', { jeton: 'faux' })).statut, 401);
+  assert.equal((await appel('/scan', { corps: photo })).statut, 401);
+});
+
+test('quota gratuit compté sur le serveur : 2 scans, puis 402 ; une photo sans repas ne compte pas', async () => {
+  const jeton = await nouveauCompte();
+  prochaineReponse = pasUnRepas;
+  const r0 = await appel('/scan', { jeton, corps: photo });
+  assert.equal(r0.statut, 200);
+  assert.equal((r0.json.compte as { scansRestants: number }).scansRestants, 2);
+
+  prochaineReponse = repas;
+  assert.equal(((await appel('/scan', { jeton, corps: photo })).json.compte as { scansRestants: number }).scansRestants, 1);
+  assert.equal(((await appel('/scan', { jeton, corps: photo })).json.compte as { scansRestants: number }).scansRestants, 0);
+  const r3 = await appel('/scan', { jeton, corps: photo });
+  assert.equal(r3.statut, 402);
+  assert.equal(r3.json.code, 'quota');
+
+  // Le lendemain (heure de Lagos), le quota repart
+  const avant = horloge;
+  horloge = new Date(avant.getTime() + 24 * 3600_000);
+  assert.equal((await appel('/compte', { jeton })).json.scansRestants, 2);
+  horloge = avant;
+});
+
+test("paiement CinetPay : création, notification revérifiée, Premium activé une seule fois", async () => {
+  const jeton = await nouveauCompte();
+  const r = await appel('/paiements', { jeton, corps: { plan: 'mensuel' } });
+  assert.equal(r.statut, 201);
+  const transactionId = r.json.transactionId as string;
+  assert.equal(r.json.urlPaiement, `https://checkout.exemple/${transactionId}`);
+
+  const creation = appelsCinetPay.find((a) => a.url.endsWith('/payment') && a.corps.transaction_id === transactionId)!;
+  assert.equal(creation.corps.amount, 2000);
+  assert.equal(creation.corps.currency, 'XOF');
+  assert.equal(creation.corps.notify_url, 'https://api.calbasse.exemple/cinetpay/notification');
+
+  // Avant le paiement : en attente
+  assert.equal((await appel(`/paiements/${transactionId}`, { jeton })).json.statut, 'en_attente');
+
+  // CinetPay notifie (formulaire), le serveur redemande le statut et active Premium
+  statutsCinetPay.set(transactionId, { status: 'ACCEPTED', amount: '2000', currency: 'XOF' });
+  const notif = `cpm_site_id=123&cpm_trans_id=${transactionId}`;
+  assert.equal((await appel('/cinetpay/notification', { corps: notif, type: 'application/x-www-form-urlencoded' })).statut, 200);
+  const etat = (await appel('/compte', { jeton })).json;
+  assert.deepEqual(etat.premium, { plan: 'mensuel', jusquau: '2026-12-13' });
+  assert.equal(etat.limite, 30);
+
+  // Notification reçue une deuxième fois : pas 30 jours de plus
+  await appel('/cinetpay/notification', { corps: notif, type: 'application/x-www-form-urlencoded' });
+  assert.deepEqual((await appel('/compte', { jeton })).json.premium, { plan: 'mensuel', jusquau: '2026-12-13' });
+
+  // Un deuxième achat prolonge à partir de la date de fin
+  const r2 = await appel('/paiements', { jeton, corps: { plan: 'annuel' } });
+  const t2 = r2.json.transactionId as string;
+  statutsCinetPay.set(t2, { status: 'ACCEPTED', amount: '20000', currency: 'XOF' });
+  const via = await appel(`/paiements/${t2}`, { jeton }); // l'app peut aussi demander le statut elle-même
+  assert.equal(via.json.statut, 'accepte');
+  assert.deepEqual((await appel('/compte', { jeton })).json.premium, { plan: 'annuel', jusquau: '2027-12-13' });
+});
+
+test('paiement : montant ou devise inattendus, notification forgée, paiement d’un autre compte', async () => {
+  const jeton = await nouveauCompte();
+  const r = await appel('/paiements', { jeton, corps: { plan: 'annuel' } });
+  const t = r.json.transactionId as string;
+  statutsCinetPay.set(t, { status: 'ACCEPTED', amount: '100', currency: 'XOF' });
+  await appel('/cinetpay/notification', { corps: `cpm_trans_id=${t}`, type: 'application/x-www-form-urlencoded' });
+  assert.equal((await appel('/compte', { jeton })).json.premium, null);
+
+  // Une notification ne suffit jamais : sans paiement connu ni statut ACCEPTED, rien ne se passe
+  assert.equal((await appel('/cinetpay/notification', { corps: 'cpm_trans_id=INVENTE', type: 'application/x-www-form-urlencoded' })).statut, 200);
+
+  const autre = await nouveauCompte();
+  assert.equal((await appel(`/paiements/${t}`, { jeton: autre })).statut, 404);
+  assert.equal((await appel('/paiements', { jeton, corps: { plan: 'gratuit-a-vie' } })).statut, 400);
+});
+
+test('paiement refusé par CinetPay', async () => {
+  const jeton = await nouveauCompte();
+  const t = (await appel('/paiements', { jeton, corps: { plan: 'mensuel' } })).json.transactionId as string;
+  statutsCinetPay.set(t, { status: 'REFUSED', amount: '2000', currency: 'XOF' });
+  assert.equal((await appel(`/paiements/${t}`, { jeton })).json.statut, 'refuse');
+});
+
+test('pages pour CinetPay : vérification de l’adresse et page de retour', async () => {
+  assert.equal((await appel('/cinetpay/notification')).statut, 200);
+  const retour = await appel('/cinetpay/retour');
+  assert.equal(retour.statut, 200);
+  assert.ok(retour.texte.includes('calbasse://premium'));
+});
+
+test('jour local : minuit à Lagos', () => {
+  assert.equal(jourLocal(new Date('2026-11-13T22:59:00Z'), 'Africa/Lagos'), '2026-11-13');
+  assert.equal(jourLocal(new Date('2026-11-13T23:01:00Z'), 'Africa/Lagos'), '2026-11-14');
+});

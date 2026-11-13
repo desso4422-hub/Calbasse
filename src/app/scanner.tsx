@@ -9,7 +9,7 @@ import { Icone, type NomIcone } from '../components/Icone';
 import { T } from '../components/T';
 import { BoutonRond } from '../components/ui';
 import { preparerPhoto } from '../services/photo';
-import { ErreurReconnaissance, modeReconnaissance, reconnaitreRepas } from '../services/reconnaissance';
+import { ErreurQuota, ErreurReconnaissance, modeReconnaissance, reconnaitreRepas } from '../services/reconnaissance';
 import { nouveauBrouillon, useBrouillon } from '../state/brouillon';
 import { estPremium, scansRestants, useStore } from '../state/store';
 import { couleurs, polices } from '../theme';
@@ -42,6 +42,7 @@ export default function Scanner() {
     try {
       const preparee = modeReconnaissance === 'serveur' ? await preparerPhoto(photo) : { uri: photo.uri, base64: undefined };
       const r = await reconnaitreRepas({ photoBase64: preparee.base64, indice });
+      if (r.compte) dispatch({ type: 'majCompteServeur', compte: r.compte });
       if (r.pasUnRepas) {
         // Pas de nourriture sur la photo : on ne décompte pas le scan.
         setErreur(r.remarque || "On ne voit pas de repas sur cette photo. Cadre l'assiette entière, vue de dessus.");
@@ -62,6 +63,11 @@ export default function Scanner() {
       );
       router.replace('/resultat');
     } catch (e) {
+      if (e instanceof ErreurQuota) {
+        if (e.compte) dispatch({ type: 'majCompteServeur', compte: e.compte });
+        router.push('/premium');
+        return;
+      }
       setErreur(e instanceof ErreurReconnaissance ? e.message : 'Analyse impossible. Réessaie, ou choisis ton plat dans la liste.');
     } finally {
       setAnalyse(false);

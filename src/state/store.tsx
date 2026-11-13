@@ -4,6 +4,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
 import { clientsDemo, type ClientCoach } from '../lib/coach.ts';
+import type { EtatCompteServeur } from '../services/api';
 import { ajouterJours, calculerCibles, cleJour, heure, type Cibles, type Huile, type Mesures, type Portion } from '../lib/nutrition.ts';
 import { trouverPlat, type LigneRepas } from '../lib/plats.ts';
 
@@ -56,6 +57,8 @@ export type Etat = {
   abonnement: Abonnement | null;
   clients: ClientCoach[];
   signalements: Signalement[];
+  /** Dernier état du compte renvoyé par le serveur (il fait foi pour Premium et les scans) */
+  serveur?: { jour: string; scansRestants: number; limite: number };
 };
 
 export const SCANS_GRATUITS = 2;
@@ -78,6 +81,7 @@ type Action =
   | { type: 'supprimerRepas'; id: string }
   | { type: 'compterScan' }
   | { type: 'activerAbonnement'; abonnement: Abonnement }
+  | { type: 'majCompteServeur'; compte: EtatCompteServeur }
   | { type: 'annulerAbonnement' }
   | { type: 'corrigerClient'; id: string; portion: Portion; huile: Huile; message?: string }
   | { type: 'relancerClient'; id: string }
@@ -107,6 +111,12 @@ function reducteur(etat: Etat, action: Action): Etat {
     }
     case 'activerAbonnement':
       return { ...etat, abonnement: action.abonnement };
+    case 'majCompteServeur':
+      return {
+        ...etat,
+        abonnement: action.compte.premium,
+        serveur: { jour: cleJour(new Date()), scansRestants: action.compte.scansRestants, limite: action.compte.limite },
+      };
     case 'annulerAbonnement':
       return { ...etat, abonnement: null };
     case 'corrigerClient':
@@ -184,6 +194,8 @@ export function estPremium(etat: Etat, maintenant = new Date()): boolean {
 }
 
 export function scansRestants(etat: Etat, maintenant = new Date()): number {
+  // Avec un serveur, son décompte fait foi (il est mis à jour à chaque scan et à l'ouverture de l'app)
+  if (etat.serveur && etat.serveur.jour === cleJour(maintenant)) return etat.serveur.scansRestants;
   const limite = estPremium(etat, maintenant) ? SCANS_PREMIUM : SCANS_GRATUITS;
   const utilises = etat.scans.jour === cleJour(maintenant) ? etat.scans.nombre : 0;
   return Math.max(0, limite - utilises);

@@ -91,7 +91,7 @@ test('nom du repas', () => {
 });
 
 test('indice libre : aliments isolés sans doublons', async () => {
-  const { reconnaitreDepuisTexte } = await import('../services/reconnaissance.ts');
+  const { reconnaitreDepuisTexte } = await import('./reconnaissanceTexte.ts');
   const r = reconnaitreDepuisTexte('riz, sauce graine, poulet, un peu d’huile');
   assert.deepEqual(r.lignes.map((l) => l.alimentId), ['riz-blanc', 'sauce-graine', 'poulet-frit']);
   const r2 = reconnaitreDepuisTexte('attiéké et alloco');

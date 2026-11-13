@@ -1,41 +1,54 @@
 /**
  * Paiement de l'abonnement Premium (Mobile Money ou carte, via CinetPay).
  *
- * Le paiement doit passer par TON serveur : c'est lui qui détient la clé API CinetPay,
- * crée la transaction (POST https://api-checkout.cinetpay.com/v2/payment), reçoit la
- * notification de paiement, puis active l'abonnement. L'app se contente d'ouvrir le lien
- * de paiement renvoyé par le serveur.
+ * Avec un serveur (EXPO_PUBLIC_API_URL) : le serveur crée la transaction CinetPay (il est seul à
+ * détenir la clé), l'app ouvre la page de paiement, puis demande le statut au serveur, qui le
+ * vérifie auprès de CinetPay avant d'activer Premium.
  *
- * Sans EXPO_PUBLIC_PAIEMENT_API_URL, on est en mode démo : l'abonnement s'active localement.
+ * Sans serveur, on est en mode démo : l'abonnement s'active localement, sans paiement réel.
  */
-import * as Linking from 'expo-linking';
+import * as WebBrowser from 'expo-web-browser';
 import { ajouterJours, cleJour } from '../lib/nutrition.ts';
 import type { Abonnement } from '../state/store';
+import { appelApi, ErreurApi, serveurConfigure, type EtatCompteServeur } from './api';
 
 export const tarifs = {
   mensuel: { prix: 2000, jours: 30 },
   annuel: { prix: 20000, jours: 365 },
 } as const;
 
-const URL_PAIEMENT = process.env.EXPO_PUBLIC_PAIEMENT_API_URL;
+export const modePaiement: 'serveur' | 'demo' = serveurConfigure ? 'serveur' : 'demo';
 
-export const modePaiement: 'serveur' | 'demo' = URL_PAIEMENT ? 'serveur' : 'demo';
+export class ErreurPaiement extends Error {}
 
-export type IssuePaiement = { statut: 'active'; abonnement: Abonnement } | { statut: 'enAttente' };
+export type IssuePaiement =
+  | { statut: 'active'; abonnement: Abonnement }
+  /** Page de paiement ouverte : il faut ensuite suivre la transaction avec suivrePaiement() */
+  | { statut: 'enAttente'; transactionId: string };
 
 export async function demarrerPaiement(plan: Abonnement['plan']): Promise<IssuePaiement> {
-  if (!URL_PAIEMENT) {
+  if (!serveurConfigure) {
     await new Promise((r) => setTimeout(r, 700));
     return { statut: 'active', abonnement: { plan, jusquau: cleJour(ajouterJours(new Date(), tarifs[plan].jours)) } };
   }
-  const reponse = await fetch(URL_PAIEMENT, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ plan, montant: tarifs[plan].prix, devise: 'XOF', retour: Linking.createURL('/premium') }),
-  });
-  if (!reponse.ok) throw new Error(`Paiement indisponible (${reponse.status})`);
-  const { urlPaiement } = (await reponse.json()) as { urlPaiement: string };
-  await Linking.openURL(urlPaiement);
-  // L'abonnement sera confirmé par le serveur après la notification CinetPay.
-  return { statut: 'enAttente' };
+  let transactionId: string;
+  let urlPaiement: string;
+  try {
+    const r = await appelApi('/paiements', { methode: 'POST', corps: { plan } });
+    transactionId = r.transactionId as string;
+    urlPaiement = r.urlPaiement as string;
+  } catch (e) {
+    throw new ErreurPaiement(e instanceof ErreurApi ? e.message : 'Le paiement n’a pas pu démarrer.');
+  }
+  // Page CinetPay dans un navigateur intégré : l'utilisateur y choisit Mobile Money ou carte.
+  await WebBrowser.openBrowserAsync(urlPaiement).catch(() => {});
+  return { statut: 'enAttente', transactionId };
+}
+
+export type SuiviPaiement = { statut: 'en_attente' | 'accepte' | 'refuse'; compte?: EtatCompteServeur };
+
+/** Demande au serveur où en est la transaction (le serveur revérifie auprès de CinetPay). */
+export async function suivrePaiement(transactionId: string): Promise<SuiviPaiement> {
+  const r = await appelApi(`/paiements/${transactionId}`);
+  return { statut: (r.statut as SuiviPaiement['statut']) ?? 'en_attente', compte: r.compte as EtatCompteServeur | undefined };
 }
