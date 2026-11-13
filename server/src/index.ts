@@ -11,6 +11,7 @@ import { creerApplication } from './app.ts';
 import { Base } from './base.ts';
 import { optionsDepuisEnv } from './config.ts';
 import { Journal } from './journal.ts';
+import { smsAfricasTalking, smsConsole } from './sms.ts';
 
 const env = process.env;
 
@@ -32,6 +33,14 @@ const cinetpay =
       }
     : null;
 
+const fournisseurSms = env.FOURNISSEUR_SMS ?? '';
+const sms =
+  fournisseurSms === 'africastalking' && env.AT_UTILISATEUR && env.AT_CLE_API
+    ? smsAfricasTalking({ utilisateur: env.AT_UTILISATEUR, cleApi: env.AT_CLE_API, expediteur: env.AT_EXPEDITEUR || undefined, sandbox: env.AT_UTILISATEUR === 'sandbox' })
+    : fournisseurSms === 'console'
+      ? smsConsole()
+      : null;
+
 const serveur = creerApplication({
   base: new Base(path.join(dossier, 'calbasse.db'), env.FUSEAU ?? 'Africa/Lagos'),
   vision: new GoogleGenAI({
@@ -41,6 +50,7 @@ const serveur = creerApplication({
   options,
   journal: new Journal(dossier, env.GARDER_PHOTOS === '1'),
   cinetpay,
+  sms,
   requetesParHeure: Number(env.REQUETES_PAR_HEURE ?? 120),
   comptesParHeure: Number(env.COMPTES_PAR_HEURE ?? 10),
   derriereProxy: env.DERRIERE_PROXY === '1',
@@ -49,5 +59,7 @@ const serveur = creerApplication({
 const port = Number(env.PORT ?? 8787);
 serveur.listen(port, () => {
   console.log(`Calbasse : serveur prêt sur le port ${port} (${options.modele}, réflexion ${options.reflexion ?? 'par défaut'})`);
+  if (!sms) console.log('SMS non configurés (FOURNISSEUR_SMS) : pas de récupération de compte par téléphone.');
+  if (fournisseurSms === 'console') console.log('⚠️  FOURNISSEUR_SMS=console : les codes sont écrits dans les logs. Réservé au développement.');
   if (!cinetpay) console.log('Paiement CinetPay non configuré (CINETPAY_API_KEY, CINETPAY_SITE_ID, URL_PUBLIQUE).');
 });

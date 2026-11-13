@@ -32,6 +32,8 @@ Réglages : voir `.env.example`. Node 22.13 ou plus récent (le serveur s'exécu
 | `GET /compte` | oui | Premium, scans restants, limite du jour |
 | `POST /scan` | oui | Analyse une photo ; `402` si le quota du jour est épuisé |
 | `POST /corrections` | oui | Corrections de l'utilisateur, pour améliorer la base |
+| `POST /telephone/code` | oui | Envoie un code à 6 chiffres par SMS |
+| `POST /telephone/verifier` | oui | Vérifie le code ; rattache le numéro, ou récupère l'ancien compte lié à ce numéro |
 | `POST /paiements` | oui | Crée une transaction CinetPay, renvoie l'adresse de paiement |
 | `GET /paiements/:id` | oui | Statut de la transaction (revérifié auprès de CinetPay) |
 | `POST /cinetpay/notification` | | Notification envoyée par CinetPay |
@@ -69,6 +71,20 @@ Vérifie les modèles disponibles et leurs prix sur [la page des modèles](https
 
 Change de modèle ou de niveau de réflexion seulement après avoir comparé la précision sur tes photos avec `npm run evaluer`.
 
+## Numéro de téléphone et récupération de compte
+
+Un compte anonyme vit dans le téléphone (son jeton). Pour ne pas perdre Premium en changeant de téléphone, l'utilisateur peut vérifier son numéro par SMS (Profil → « Protéger mon compte », ou proposé juste après un paiement).
+
+Sur un nouveau téléphone, « J'ai déjà un compte Premium » (premier écran) ou Profil → même parcours : si le numéro vérifié appartient déjà à un compte, l'appareil **reprend ce compte**. L'ancien compte reçoit un nouveau jeton, ce qui déconnecte l'ancien téléphone (utile s'il a été perdu ou volé). L'abonnement le plus long est gardé, les paiements suivent, et les scans du jour s'additionnent (pas de quota gratuit en double).
+
+Garde-fous : code à 6 chiffres valable 10 minutes, 5 essais maximum, 3 codes par numéro et 5 par compte et par heure ; seul le haché du code est stocké ; un code ne sert qu'une fois.
+
+Envoi des SMS : `FOURNISSEUR_SMS=africastalking` avec `AT_UTILISATEUR` et `AT_CLE_API` ([Africa's Talking](https://africastalking.com), qui couvre la plupart des opérateurs de la région). Commence avec `AT_UTILISATEUR=sandbox` (bac à sable, aucun vrai SMS). En développement, `FOURNISSEUR_SMS=console` écrit le code dans les logs du serveur : **jamais en production**. Sans fournisseur, les routes `/telephone` répondent 503 et l'app ne propose pas la récupération.
+
+⚠️ Comme pour CinetPay, l'appel à Africa's Talking (`src/sms.ts`) a été écrit sans accès à leur documentation : vérifie-le dans leur bac à sable, puis avec un vrai SMS, avant la mise en production. Chaque SMS est payant : regarde leurs tarifs par pays.
+
+Ce que la récupération ne ramène pas : **l'historique des repas**, qui reste dans l'ancien téléphone (il n'est pas encore sauvegardé sur le serveur). L'app le dit à l'utilisateur.
+
 ## Paiement CinetPay
 
 1. Crée un compte marchand sur CinetPay et récupère l'**API key** et le **site ID**.
@@ -89,4 +105,4 @@ Le XOF couvre l'UEMOA (Bénin, Côte d'Ivoire, Sénégal, Togo, Burkina Faso, Ma
 
 N'importe quel hébergeur Node (Render, Railway, Fly.io, un VPS…) : `npm install` puis `npm start`, avec `GEMINI_API_KEY` en variable secrète. Mets le serveur derrière HTTPS. Les photos de repas sont des données personnelles : avec l'offre gratuite de l'API Gemini, Google peut utiliser les requêtes pour améliorer ses produits ; vérifie les conditions de Google et passe sur un compte payant avant d'accueillir de vrais utilisateurs. La limite par adresse IP est en mémoire : avec plusieurs instances, déplace-la vers le proxy ou une base partagée. Derrière un proxy (Render, Fly.io, Nginx…), mets `DERRIERE_PROXY=1` pour que les limites par adresse IP voient la vraie adresse.
 
-Limite connue : les comptes sont anonymes. Quelqu'un de déterminé peut en créer plusieurs pour cumuler des scans gratuits ; la limite de comptes créés par adresse IP (`COMPTES_PAR_HEURE`) freine ça. Pour aller plus loin : Play Integrity (Android) et App Attest (iOS), ou une connexion par numéro de téléphone. Si le téléphone est réinitialisé, le jeton est perdu, et avec lui l'abonnement : prévois une façon de le récupérer (numéro de téléphone, référence de transaction) avant le lancement.
+Limite connue : les comptes sont anonymes. Quelqu'un de déterminé peut en créer plusieurs pour cumuler des scans gratuits ; la limite de comptes créés par adresse IP (`COMPTES_PAR_HEURE`) freine ça. Pour aller plus loin : Play Integrity (Android) et App Attest (iOS). Un utilisateur qui n'a pas vérifié son numéro et réinitialise son téléphone perd son compte : en dernier recours, retrouve son paiement dans la table `paiements` grâce à la référence CinetPay qu'il te donne, et rattache-le à son nouveau compte.

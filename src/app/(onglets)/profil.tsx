@@ -5,6 +5,7 @@ import { Icone, type NomIcone } from '../../components/Icone';
 import { T } from '../../components/T';
 import { Ecran, Etiquette, TitreSection } from '../../components/ui';
 import { formater } from '../../lib/nutrition.ts';
+import { serveurConfigure } from '../../services/api';
 import { modeReconnaissance } from '../../services/reconnaissance';
 import { estPremium, scansRestants, useStore } from '../../state/store';
 import { couleurs } from '../../theme';
@@ -68,6 +69,14 @@ export default function Profil() {
           texte={premium ? `${scansRestants(etat)} scans restants aujourd'hui` : `${scansRestants(etat)} scans gratuits restants aujourd'hui`}
           onPress={() => router.push('/premium')}
         />
+        {serveurConfigure ? (
+          <Ligne
+            icone="telephone"
+            titre={etat.serveur?.telephone ? 'Mon numéro' : 'Protéger mon compte'}
+            texte={etat.serveur?.telephone ? `${etat.serveur.telephone} · pour retrouver ton compte` : 'Ajoute ton numéro pour garder Premium si tu changes de téléphone'}
+            onPress={() => router.push('/telephone')}
+          />
+        ) : null}
         <Ligne
           icone="groupe"
           titre="Mode coach"

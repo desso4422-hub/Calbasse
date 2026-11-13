@@ -19,6 +19,8 @@ export type EtatCompteServeur = {
   premium: { plan: 'mensuel' | 'annuel'; jusquau: string } | null;
   scansRestants: number;
   limite: number;
+  /** Numéro vérifié, masqué (« +22901••••3456 »), ou null */
+  telephone: string | null;
 };
 
 export class ErreurApi extends Error {
@@ -100,4 +102,9 @@ export async function appelApi(chemin: string, init: { methode?: string; corps?:
 
 export async function lireCompte(): Promise<EtatCompteServeur> {
   return (await appelApi('/compte')) as unknown as EtatCompteServeur;
+}
+
+/** Après une récupération de compte, l'appareil prend le jeton de l'ancien compte. */
+export async function remplacerJeton(nouveau: string): Promise<void> {
+  await stockage.ecrire(nouveau);
 }

@@ -66,7 +66,8 @@ async function reconnaitreSurServeur(image: string, indice: string): Promise<Res
   } catch (e) {
     if (e instanceof ErreurApi && e.code === 'quota') {
       const { premium, scansRestants, limite } = e.donnees as Partial<EtatCompteServeur>;
-      throw new ErreurQuota(e.message, limite !== undefined ? { premium: premium ?? null, scansRestants: scansRestants ?? 0, limite } : undefined);
+      const { telephone } = e.donnees as Partial<EtatCompteServeur>;
+      throw new ErreurQuota(e.message, limite !== undefined ? { premium: premium ?? null, scansRestants: scansRestants ?? 0, limite, telephone: telephone ?? null } : undefined);
     }
     throw new ErreurReconnaissance(e instanceof ErreurApi ? e.message : 'Analyse impossible. Réessaie.');
   }

@@ -58,7 +58,7 @@ export type Etat = {
   clients: ClientCoach[];
   signalements: Signalement[];
   /** Dernier état du compte renvoyé par le serveur (il fait foi pour Premium et les scans) */
-  serveur?: { jour: string; scansRestants: number; limite: number };
+  serveur?: { jour: string; scansRestants: number; limite: number; telephone?: string | null };
 };
 
 export const SCANS_GRATUITS = 2;
@@ -115,7 +115,12 @@ function reducteur(etat: Etat, action: Action): Etat {
       return {
         ...etat,
         abonnement: action.compte.premium,
-        serveur: { jour: cleJour(new Date()), scansRestants: action.compte.scansRestants, limite: action.compte.limite },
+        serveur: {
+          jour: cleJour(new Date()),
+          scansRestants: action.compte.scansRestants,
+          limite: action.compte.limite,
+          telephone: action.compte.telephone ?? null,
+        },
       };
     case 'annulerAbonnement':
       return { ...etat, abonnement: null };

@@ -7,6 +7,8 @@
  *   GET  /compte              🔒   état du compte (Premium, scans restants)
  *   POST /scan                🔒   { image, typeImage?, indice? } → aliments reconnus (décompte 1 scan)
  *   POST /corrections         🔒   { scanId, proposees, finales }
+ *   POST /telephone/code      🔒   { numero, indicatif? } → envoie un code par SMS
+ *   POST /telephone/verifier  🔒   { numero, indicatif?, code } → rattache le numéro, ou récupère l'ancien compte
  *   POST /paiements           🔒   { plan } → { transactionId, urlPaiement } (CinetPay)
  *   GET  /paiements/:id       🔒   statut du paiement (revérifié auprès de CinetPay)
  *   POST /cinetpay/notification    appelée par CinetPay (notify_url)
@@ -15,11 +17,12 @@
  * 🔒 = en-tête « Authorization: Bearer <jeton> »
  */
 import { ApiError } from '@google/genai';
-import { randomUUID } from 'node:crypto';
+import { randomInt, randomUUID } from 'node:crypto';
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import type { Base, Compte, Plan } from './base.ts';
+import { masquerNumero, type Base, type Compte, type Plan } from './base.ts';
 import { creerPaiementCinetPay, ErreurCinetPay, verifierPaiementCinetPay, type ClientHttp, type ConfigCinetPay } from './cinetpay.ts';
 import type { Journal } from './journal.ts';
+import { normaliserNumero, type EnvoyeurSms } from './sms.ts';
 import { analyserRepas, RefusModele, ReponseIllisible, type ClientVision, type OptionsAnalyse, type TypeImage } from './reconnaissance.ts';
 
 export type Dependances = {
@@ -29,6 +32,8 @@ export type Dependances = {
   journal: Journal;
   /** null : paiement non configuré (les routes de paiement répondent 503) */
   cinetpay: ConfigCinetPay | null;
+  /** null : SMS non configurés (les routes /telephone répondent 503) */
+  sms: EnvoyeurSms | null;
   http?: ClientHttp;
   /** Limites anti-abus par adresse IP et par heure */
   requetesParHeure?: number;
@@ -215,6 +220,40 @@ export function creerApplication(d: Dependances): Server {
       } catch {
         return repondre(res, 400, { erreur: 'Requête illisible.' });
       }
+    }
+
+    if (methode === 'POST' && (chemin === '/telephone/code' || chemin === '/telephone/verifier')) {
+      if (!d.sms) return repondre(res, 503, { erreur: "La vérification par SMS n'est pas encore disponible." });
+      let corps: Record<string, unknown>;
+      try {
+        corps = await lireJson(req);
+      } catch {
+        return repondre(res, 400, { erreur: 'Requête illisible.' });
+      }
+      const numero = normaliserNumero(String(corps.numero ?? ''), typeof corps.indicatif === 'string' ? corps.indicatif : undefined);
+      if (!numero) return repondre(res, 400, { erreur: 'Numéro de téléphone invalide.' });
+
+      if (chemin === '/telephone/code') {
+        const code = String(randomInt(0, 1_000_000)).padStart(6, '0');
+        if (!base.enregistrerCode(compte.id, numero, code)) {
+          return repondre(res, 429, { erreur: 'Trop de codes demandés. Réessaie dans une heure.' });
+        }
+        try {
+          await d.sms.envoyer(numero, `Calbasse : ton code est ${code}. Il expire dans 10 minutes. Ne le donne à personne.`);
+        } catch (e) {
+          console.error(e);
+          return repondre(res, 502, { erreur: "Le SMS n'a pas pu être envoyé. Vérifie le numéro et réessaie." });
+        }
+        return repondre(res, 200, { ok: true, numero: masquerNumero(numero), expireDansMinutes: 10 });
+      }
+
+      const resultat = base.verifierCode(compte.id, numero, String(corps.code ?? '').replace(/\D/g, ''));
+      if (resultat === 'trop_essais') return repondre(res, 429, { erreur: 'Trop d’essais. Demande un nouveau code.', code: 'trop_essais' });
+      if (resultat === 'expire') return repondre(res, 400, { erreur: 'Ce code a expiré. Demande-en un nouveau.', code: 'expire' });
+      if (resultat === 'invalide') return repondre(res, 400, { erreur: 'Code incorrect.', code: 'invalide' });
+      const lien = base.lierTelephone(compte.id, numero);
+      const final = base.compte(lien.compteId)!;
+      return repondre(res, 200, { recupere: lien.nouveauJeton !== null, jeton: lien.nouveauJeton, ...base.etatCompte(final) });
     }
 
     if (methode === 'POST' && chemin === '/paiements') {

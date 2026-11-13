@@ -114,3 +114,14 @@ test('refus, réponse vide, JSON cassé, identifiant hors base', async () => {
   const invente = { ...garba, composants: [{ ...garba.composants[0], alimentId: 'pizza' }] };
   await assert.rejects(analyserRepas(fauxClient({ text: JSON.stringify(invente) } as never), 'X', 'image/jpeg', '', options), /non conforme/);
 });
+
+test('numéros de téléphone', async () => {
+  const { normaliserNumero } = await import('./sms.ts');
+  assert.equal(normaliserNumero('01 97 12 34 56', '229'), '+2290197123456');
+  assert.equal(normaliserNumero('+225 07 07 07 07 07'), '+2250707070707');
+  assert.equal(normaliserNumero('00221 77 123 45 67'), '+221771234567');
+  assert.equal(normaliserNumero('77 123 45 67'), null);
+  assert.equal(normaliserNumero('123', '229'), null);
+  const { masquerNumero } = await import('./base.ts');
+  assert.equal(masquerNumero('+221771234567'), '+22177•••4567');
+});

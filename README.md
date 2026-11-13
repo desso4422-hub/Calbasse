@@ -52,11 +52,11 @@ src/
   app/            écrans (Expo Router)
   components/     T (texte), ui (boutons, segments, cartes), Graphiques (anneau, assiette, logo), Icone
   lib/            logique pure, testée : aliments, plats composés, nutrition, bilan, coach
-  services/       api (compte, jeton), reconnaissance, photo (réduction), paiement (CinetPay)
+  services/       api (compte, jeton), reconnaissance, photo (réduction), paiement (CinetPay), téléphone (SMS)
   state/          store (données gardées sur le téléphone), brouillon (repas en cours)
   theme.ts        palette et polices des Fondations
 design/           maquettes d'origine et logo
-server/           serveur : reconnaissance (Gemini), comptes, quota, paiement CinetPay, banc d'évaluation
+server/           serveur : reconnaissance (Gemini), comptes, quota, téléphone (SMS), paiement CinetPay, banc d'évaluation
 ```
 
 Règles de calcul (`src/lib/nutrition.ts`) :
@@ -77,6 +77,7 @@ Dans l'app :
 - un aliment vu mais absent de la base apparaît en pointillés (« oignons et tomates crus ») et se choisit dans la liste ;
 - une photo sans nourriture ne décompte pas de scan ;
 - le quota de scans est compté par le serveur (compte anonyme créé au premier lancement, jeton dans le stockage sécurisé du téléphone) ;
+- le numéro de téléphone, vérifié par SMS, permet de retrouver son compte et Premium sur un nouveau téléphone (Profil → « Protéger mon compte », ou « J'ai déjà un compte Premium » au premier écran) ;
 - quand l'utilisateur corrige, la correction remonte au serveur (`POST /corrections`) pour améliorer la base.
 
 Sans `EXPO_PUBLIC_API_URL`, l'app reste en **mode démo** : elle s'appuie sur l'indice texte saisi au scanner (« garba », « riz, sauce graine, poulet ») et, sans indice, propose un plat d'exemple.
@@ -105,7 +106,7 @@ Tout est stocké sur le téléphone (AsyncStorage). Dans Profil : « Charger des
 ## Prochaines étapes
 
 1. Remplacer la base d'aliments par des valeurs sourcées, validées par un nutritionniste.
-2. Constituer un jeu de photos réelles étiquetées et mesurer la reconnaissance (`server/eval/`), puis choisir modèle et effort selon la précision et le coût.
-3. Vérifier le module CinetPay avec la documentation et de vrais petits paiements.
-4. Comptes utilisateurs et synchronisation (nécessaires au mode coach).
+2. Constituer un jeu de photos réelles étiquetées et mesurer la reconnaissance (`server/eval/`), puis choisir le modèle Gemini et le niveau de réflexion selon la précision et le coût.
+3. Vérifier les modules CinetPay et Africa's Talking avec leur documentation, puis de vrais petits paiements et SMS.
+4. Sauvegarde des repas sur le serveur (historique retrouvé avec le compte), puis mode coach relié.
 5. Construire les apps avec EAS (`npx eas-cli@latest build`).

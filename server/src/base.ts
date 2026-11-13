@@ -20,7 +20,20 @@ export const TARIFS: Record<Plan, { montant: number; jours: number }> = {
   annuel: { montant: 20000, jours: 365 },
 };
 
-export type Compte = { id: string; premiumJusquau: string | null; plan: Plan | null };
+export type Compte = { id: string; premiumJusquau: string | null; plan: Plan | null; telephone: string | null };
+
+/** Durée de validité d'un code SMS, et limites contre les abus */
+export const CODE_VALIDITE_MS = 10 * 60_000;
+export const CODE_ESSAIS_MAX = 5;
+export const CODES_PAR_NUMERO_PAR_HEURE = 3;
+export const CODES_PAR_COMPTE_PAR_HEURE = 5;
+
+export type ResultatCode = 'ok' | 'invalide' | 'expire' | 'trop_essais';
+
+/** Masque un numéro pour l'affichage : +229 01 •• •• 34 56 → « +22901••••3456 » */
+export function masquerNumero(numero: string): string {
+  return numero.length <= 8 ? numero : `${numero.slice(0, 6)}${'•'.repeat(Math.max(1, numero.length - 10))}${numero.slice(-4)}`;
+}
 
 export type Paiement = {
   transactionId: string;
@@ -71,6 +84,14 @@ export class Base {
         nombre INTEGER NOT NULL,
         PRIMARY KEY (compte_id, jour)
       );
+      CREATE TABLE IF NOT EXISTS codes_telephone (
+        numero TEXT NOT NULL,
+        compte_id TEXT NOT NULL,
+        code TEXT NOT NULL,
+        cree_le INTEGER NOT NULL,
+        expire_le INTEGER NOT NULL,
+        essais INTEGER NOT NULL DEFAULT 0
+      );
       CREATE TABLE IF NOT EXISTS paiements (
         transaction_id TEXT PRIMARY KEY,
         compte_id TEXT NOT NULL,
@@ -82,6 +103,12 @@ export class Base {
         details TEXT
       );
     `);
+    // Migration : numéro de téléphone (ajouté après la première version)
+    const colonnes = this.db.prepare('PRAGMA table_info(comptes)').all() as { name: string }[];
+    if (!colonnes.some((c) => c.name === 'telephone')) {
+      this.db.exec('ALTER TABLE comptes ADD COLUMN telephone TEXT');
+    }
+    this.db.exec('CREATE UNIQUE INDEX IF NOT EXISTS comptes_telephone ON comptes (telephone)');
   }
 
   aujourdhui(): string {
@@ -94,21 +121,20 @@ export class Base {
     const id = randomUUID();
     const jeton = randomBytes(32).toString('base64url');
     this.db.prepare('INSERT INTO comptes (id, jeton, cree_le) VALUES (?, ?, ?)').run(id, empreinte(jeton), this.maintenant().toISOString());
-    return { compte: { id, premiumJusquau: null, plan: null }, jeton };
+    return { compte: { id, premiumJusquau: null, plan: null, telephone: null }, jeton };
   }
 
   compteParJeton(jeton: string): Compte | null {
-    const l = this.db.prepare('SELECT id, premium_jusquau, plan FROM comptes WHERE jeton = ?').get(empreinte(jeton)) as
-      | { id: string; premium_jusquau: string | null; plan: Plan | null }
-      | undefined;
-    return l ? { id: l.id, premiumJusquau: l.premium_jusquau, plan: l.plan } : null;
+    return this.lireCompte(this.db.prepare('SELECT id, premium_jusquau, plan, telephone FROM comptes WHERE jeton = ?').get(empreinte(jeton)));
   }
 
   compte(id: string): Compte | null {
-    const l = this.db.prepare('SELECT id, premium_jusquau, plan FROM comptes WHERE id = ?').get(id) as
-      | { id: string; premium_jusquau: string | null; plan: Plan | null }
-      | undefined;
-    return l ? { id: l.id, premiumJusquau: l.premium_jusquau, plan: l.plan } : null;
+    return this.lireCompte(this.db.prepare('SELECT id, premium_jusquau, plan, telephone FROM comptes WHERE id = ?').get(id));
+  }
+
+  private lireCompte(ligne: unknown): Compte | null {
+    const l = ligne as { id: string; premium_jusquau: string | null; plan: Plan | null; telephone: string | null } | undefined;
+    return l ? { id: l.id, premiumJusquau: l.premium_jusquau, plan: l.plan, telephone: l.telephone } : null;
   }
 
   estPremium(c: Compte): boolean {
@@ -142,7 +168,77 @@ export class Base {
       premium: this.estPremium(c) ? { plan: c.plan, jusquau: c.premiumJusquau } : null,
       scansRestants: this.scansRestants(c),
       limite: this.limite(c),
+      telephone: c.telephone ? masquerNumero(c.telephone) : null,
     };
+  }
+
+  // ——— Téléphone : codes SMS et récupération de compte ———
+
+  /** Enregistre un code à envoyer. false si trop de codes ont été demandés récemment. */
+  enregistrerCode(compteId: string, numero: string, code: string): boolean {
+    const maintenant = this.maintenant().getTime();
+    const depuis = maintenant - 3_600_000;
+    const parNumero = this.db.prepare('SELECT COUNT(*) AS n FROM codes_telephone WHERE numero = ? AND cree_le > ?').get(numero, depuis) as { n: number };
+    const parCompte = this.db.prepare('SELECT COUNT(*) AS n FROM codes_telephone WHERE compte_id = ? AND cree_le > ?').get(compteId, depuis) as { n: number };
+    if (parNumero.n >= CODES_PAR_NUMERO_PAR_HEURE || parCompte.n >= CODES_PAR_COMPTE_PAR_HEURE) return false;
+    this.db.prepare('DELETE FROM codes_telephone WHERE cree_le < ?').run(depuis); // ménage
+    this.db
+      .prepare('INSERT INTO codes_telephone (numero, compte_id, code, cree_le, expire_le) VALUES (?, ?, ?, ?, ?)')
+      .run(numero, compteId, empreinte(`${numero}:${code}`), maintenant, maintenant + CODE_VALIDITE_MS);
+    return true;
+  }
+
+  /** Vérifie le dernier code envoyé à ce numéro pour ce compte. */
+  verifierCode(compteId: string, numero: string, code: string): ResultatCode {
+    const l = this.db
+      .prepare('SELECT rowid, code, expire_le, essais FROM codes_telephone WHERE numero = ? AND compte_id = ? ORDER BY cree_le DESC LIMIT 1')
+      .get(numero, compteId) as { rowid: number; code: string; expire_le: number; essais: number } | undefined;
+    if (!l) return 'invalide';
+    if (l.essais >= CODE_ESSAIS_MAX) return 'trop_essais';
+    if (l.expire_le < this.maintenant().getTime()) return 'expire';
+    this.db.prepare('UPDATE codes_telephone SET essais = essais + 1 WHERE rowid = ?').run(l.rowid);
+    if (l.code !== empreinte(`${numero}:${code}`)) return l.essais + 1 >= CODE_ESSAIS_MAX ? 'trop_essais' : 'invalide';
+    this.db.prepare('DELETE FROM codes_telephone WHERE numero = ?').run(numero);
+    return 'ok';
+  }
+
+  /**
+   * Rattache un numéro vérifié au compte de cet appareil.
+   * Si le numéro appartient déjà à un autre compte (téléphone perdu ou réinitialisé), c'est une
+   * récupération : l'appareil reprend l'ancien compte, qui reçoit un nouveau jeton (l'ancien
+   * appareil est déconnecté). L'abonnement le plus long et les paiements sont conservés, les
+   * scans du jour s'additionnent (pas de quota gratuit en double).
+   */
+  lierTelephone(compteId: string, numero: string): { compteId: string; nouveauJeton: string | null } {
+    const ancien = this.db.prepare('SELECT id FROM comptes WHERE telephone = ?').get(numero) as { id: string } | undefined;
+    if (!ancien || ancien.id === compteId) {
+      this.db.prepare('UPDATE comptes SET telephone = ? WHERE id = ?').run(numero, compteId);
+      return { compteId, nouveauJeton: null };
+    }
+    const actuel = this.compte(compteId)!;
+    const garde = this.compte(ancien.id)!;
+    const jour = this.aujourdhui();
+    const nouveauJeton = randomBytes(32).toString('base64url');
+    const plusLong = (actuel.premiumJusquau ?? '') > (garde.premiumJusquau ?? '') ? actuel : garde;
+
+    this.db.exec('BEGIN');
+    try {
+      this.db.prepare('UPDATE comptes SET jeton = ?, premium_jusquau = ?, plan = ? WHERE id = ?').run(empreinte(nouveauJeton), plusLong.premiumJusquau, plusLong.plan, garde.id);
+      this.db
+        .prepare(
+          'INSERT INTO scans (compte_id, jour, nombre) VALUES (?, ?, ?) ON CONFLICT (compte_id, jour) DO UPDATE SET nombre = nombre + excluded.nombre',
+        )
+        .run(garde.id, jour, this.scansUtilises(actuel.id));
+      this.db.prepare('UPDATE paiements SET compte_id = ? WHERE compte_id = ?').run(garde.id, actuel.id);
+      this.db.prepare('DELETE FROM scans WHERE compte_id = ?').run(actuel.id);
+      this.db.prepare('DELETE FROM codes_telephone WHERE compte_id = ?').run(actuel.id);
+      this.db.prepare('DELETE FROM comptes WHERE id = ?').run(actuel.id);
+      this.db.exec('COMMIT');
+    } catch (e) {
+      this.db.exec('ROLLBACK');
+      throw e;
+    }
+    return { compteId: garde.id, nouveauJeton };
   }
 
   // ——— Paiements ———

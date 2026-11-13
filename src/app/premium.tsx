@@ -4,7 +4,8 @@ import { ActivityIndicator, AppState, View } from 'react-native';
 import { Logo } from '../components/Graphiques';
 import { Icone } from '../components/Icone';
 import { T } from '../components/T';
-import { Bouton, BoutonRond, Choix, Ecran, Etiquette, PastilleRadio } from '../components/ui';
+import { Bouton, BoutonRond, Carte, Choix, Ecran, Etiquette, PastilleRadio } from '../components/ui';
+import { serveurConfigure } from '../services/api';
 import { depuisCle, formater } from '../lib/nutrition.ts';
 import { demarrerPaiement, ErreurPaiement, modePaiement, suivrePaiement, tarifs } from '../services/paiement';
 import { estPremium, SCANS_GRATUITS, SCANS_PREMIUM, useStore } from '../state/store';
@@ -126,6 +127,17 @@ export default function Premium() {
           Abonnement {etat.abonnement.plan}, valable jusqu’au {fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}. Sans renouvellement automatique : tu pourras le prolonger depuis cet écran.
         </T>
         <Liste />
+        {serveurConfigure && !etat.serveur?.telephone ? (
+          <Carte style={{ backgroundColor: couleurs.terreDouce, borderWidth: 0, gap: 10 }}>
+            <T g={800} taille={15}>
+              Ne perds pas ton abonnement
+            </T>
+            <T taille={13} interligne={1.45}>
+              Ajoute ton numéro : si tu changes de téléphone, tu retrouveras Premium en un SMS.
+            </T>
+            <Bouton titre="Ajouter mon numéro" variante="contour" icone="telephone" hauteur={48} onPress={() => router.push('/telephone')} />
+          </Carte>
+        ) : null}
       </Ecran>
     );
   }
