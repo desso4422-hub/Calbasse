@@ -12,12 +12,30 @@ export type Etiquette = {
   grammes?: Record<string, number>;
 };
 
+/**
+ * Variantes proches : même famille, calories voisines, souvent indiscernables sur une photo.
+ * Une confusion à l'intérieur d'un groupe est une nuance (corrigée en un geste), pas une erreur grave.
+ */
+export const VARIANTES_PROCHES: string[][] = [
+  ['poulet-frit', 'poulet-braise', 'kedjenou', 'pintade'],
+  ['poisson-frit', 'poisson-braise', 'thon-frit'],
+  ['boeuf', 'mouton', 'peau-boeuf', 'tripes', 'gesiers'],
+  ['igname-pilee', 'foufou', 'pate-blanche', 'placali', 'banku'],
+  ['crudites', 'salade-mayo'],
+];
+
+function proches(a: string, b: string): boolean {
+  return VARIANTES_PROCHES.some((g) => g.includes(a) && g.includes(b));
+}
+
 export type NoteScan = {
   vrais: string[];
   manques: string[];
   enTrop: string[];
   /** Aliments manqués mais proposés en alternative (corrigeables en un geste) */
   rattrapables: string[];
+  /** Aliments manqués, mais remplacés par une variante proche */
+  presqueJustes: string[];
   exact: boolean;
   /** Écarts relatifs de grammes, pour les aliments pesés et trouvés */
   ecartsGrammes: number[];
@@ -31,13 +49,14 @@ export function noter(scan: ResultatScan, etiquette: Etiquette): NoteScan {
   const enTrop = [...trouves].filter((id) => !attendus.has(id));
   const alternatives = new Set(scan.lignes.flatMap((l) => l.alternatives));
   const rattrapables = manques.filter((id) => alternatives.has(id));
+  const presqueJustes = manques.filter((id) => [...trouves].some((t) => !attendus.has(t) && proches(id, t)));
   const ecartsGrammes = Object.entries(etiquette.grammes ?? {})
     .map(([id, g]) => {
       const l = scan.lignes.find((x) => x.alimentId === id);
       return l && g > 0 ? Math.abs(l.grammes - g) / g : null;
     })
     .filter((x): x is number => x !== null);
-  return { vrais, manques, enTrop, rattrapables, exact: manques.length === 0 && enTrop.length === 0, ecartsGrammes };
+  return { vrais, manques, enTrop, rattrapables, presqueJustes, exact: manques.length === 0 && enTrop.length === 0, ecartsGrammes };
 }
 
 export type Bilan = {
@@ -45,6 +64,8 @@ export type Bilan = {
   precision: number;
   rappel: number;
   rappelAvecAlternatives: number;
+  /** Rappel en acceptant les variantes proches (poulet frit / braisé…) */
+  rappelProche: number;
   assiettesExactes: number;
   ecartGrammesMedian: number | null;
   confusions: Record<string, number>;
@@ -70,6 +91,7 @@ export function resumer(notes: NoteScan[]): Bilan {
     precision: trouves ? vrais / trouves : 0,
     rappel: attendus ? vrais / attendus : 0,
     rappelAvecAlternatives: attendus ? (vrais + somme((n) => n.rattrapables.length)) / attendus : 0,
+    rappelProche: attendus ? (vrais + somme((n) => n.presqueJustes.length)) / attendus : 0,
     assiettesExactes: notes.length ? notes.filter((n) => n.exact).length / notes.length : 0,
     ecartGrammesMedian: ecarts.length ? ecarts[Math.floor(ecarts.length / 2)] : null,
     confusions,

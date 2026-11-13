@@ -75,6 +75,7 @@ Assiettes entièrement justes : ${pct(bilan.assiettesExactes)}
 Précision (aliments proposés qui sont justes) : ${pct(bilan.precision)}
 Rappel (aliments présents qui sont trouvés) : ${pct(bilan.rappel)}
 Rappel en comptant les alternatives proposées : ${pct(bilan.rappelAvecAlternatives)}
+Rappel en acceptant les variantes proches (poulet frit/braisé, bœuf/chèvre…) : ${pct(bilan.rappelProche)}
 Écart médian sur les grammes pesés : ${bilan.ecartGrammesMedian === null ? '—' : pct(bilan.ecartGrammesMedian)}
 Durée médiane d'une analyse : ${(durees[Math.floor(durees.length / 2)] / 1000).toFixed(1)} s
 Confusions les plus fréquentes :`);
