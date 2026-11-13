@@ -43,7 +43,8 @@
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types src/lib/*.test.ts",
-    "lint": "expo lint"
+    "lint": "expo lint",
+    "build:vercel": "node scripts/vercel-build.mjs"
   },
   "private": true
 }

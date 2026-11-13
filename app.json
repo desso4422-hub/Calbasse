@@ -30,7 +30,13 @@
     },
     "web": {
       "favicon": "./assets/favicon.png",
-      "output": "single"
+      "output": "single",
+      "name": "Calbasse",
+      "shortName": "Calbasse",
+      "lang": "fr",
+      "themeColor": "#FBF5EA",
+      "backgroundColor": "#FBF5EA",
+      "description": "Scanne ton plat africain et connais ses calories et protéines."
     },
     "plugins": [
       "expo-router",

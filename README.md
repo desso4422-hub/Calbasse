@@ -43,6 +43,19 @@ Pour tout réafficher : `EXPO_PUBLIC_MVP=0` dans `.env.local` (voir `src/config.
 - **Aucune photo perdue** : si le réseau ne suit pas, ou si l'utilisateur ne veut pas attendre, la photo est gardée sur le téléphone et le repas apparaît dans Aujourd'hui (« En attente de réseau »). Il est analysé automatiquement dès que la connexion revient, puis passe à « Prêt à vérifier ». Ça marche aussi si l'app est fermée entre-temps.
 - **Jamais compté deux fois** : chaque photo porte une clé unique. Si elle est renvoyée (coupure pendant la réponse, file d'attente), le serveur rend le même résultat sans refaire l'analyse ni décompter un scan.
 
+## Installer Calbasse sur un téléphone (PWA)
+
+Calbasse s'utilise comme une **PWA** : une page web qui s'installe sur l'écran d'accueil comme une app (Android et iPhone), sans Play Store. Appareil photo, galerie et ouverture hors ligne fonctionnent.
+
+Hébergement prévu : **[Vercel](https://vercel.com)** (offre gratuite, connexion avec GitHub). La page et le serveur sont au même endroit, le serveur répond sous `/api`, et la clé RodiumAI reste côté serveur.
+
+1. Sur vercel.com : **Add New → Project**, choisir le dépôt `calbasse` et la branche de travail.
+2. Dans **Environment Variables**, ajouter `RODIUMAI_API_KEY` (ta clé RodiumAI) et, pour les testeurs, `SCANS_GRATUITS=10`.
+3. **Deploy**. Vercel lit `vercel.json` et lance `npm run build:vercel`.
+4. Sur le téléphone, ouvrir l'adresse donnée par Vercel, puis : **Android (Chrome)** menu ⋮ → « Installer l'application » ; **iPhone (Safari)** bouton Partager → « Sur l'écran d'accueil ».
+
+Pour vérifier la construction en local : `npm run build:vercel` (résultat dans `.vercel/output`). Sur l'offre gratuite, les comptes et compteurs de scans vivent dans `/tmp` et repartent parfois à zéro.
+
 ## Écrans
 
 | Maquette | Fichier |
