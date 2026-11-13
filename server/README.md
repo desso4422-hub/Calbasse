@@ -3,7 +3,7 @@
 Trois rôles :
 
 1. **Reconnaissance des plats** : reçoit la photo d'une assiette, demande au modèle de vision Gemini (Google) d'identifier chaque aliment **parmi ceux de la base de l'app** (`src/lib/aliments.ts`), et renvoie les aliments, les grammes estimés, une confiance et des alternatives. Les calories sont calculées par l'app, jamais par le modèle.
-2. **Comptes et quota de scans** : chaque installation de l'app reçoit un compte anonyme (un jeton gardé dans le stockage sécurisé du téléphone). Le serveur compte les scans : 2 par jour en gratuit, 30 en Premium. Le compteur de l'app n'est qu'un affichage.
+2. **Comptes et quota de scans** : chaque installation de l'app reçoit un compte anonyme (un jeton gardé dans le stockage sécurisé du téléphone). Le serveur compte les scans : 2 par jour en gratuit et 30 en Premium par défaut, réglables avec `SCANS_GRATUITS` et `SCANS_PREMIUM` (pour les testeurs du MVP, par exemple `SCANS_GRATUITS=10`). Le compteur de l'app n'est qu'un affichage.
 3. **Paiement Premium** avec CinetPay (Mobile Money et carte), vérifié côté serveur.
 
 Les données (comptes, scans, paiements) sont dans un fichier SQLite, `DATA_DIR/calbasse.db`, géré par Node lui-même (aucune base à installer). Sauvegarde ce fichier régulièrement.
@@ -30,7 +30,7 @@ Réglages : voir `.env.example`. Node 22.13 ou plus récent (le serveur s'exécu
 | `GET /sante` | | État du serveur |
 | `POST /comptes` | | Crée un compte anonyme, renvoie son jeton |
 | `GET /compte` | oui | Premium, scans restants, limite du jour |
-| `POST /scan` | oui | Analyse une photo ; `402` si le quota du jour est épuisé |
+| `POST /scan` | oui | Analyse une photo ; `402` si le quota du jour est épuisé. Avec `cle` (identifiant unique de la photo), un renvoi rend le même résultat sans nouvelle analyse ni nouveau décompte, même pendant que l'analyse est en cours |
 | `POST /corrections` | oui | Corrections de l'utilisateur, pour améliorer la base |
 | `POST /telephone/code` | oui | Envoie un code à 6 chiffres par SMS |
 | `POST /telephone/verifier` | oui | Vérifie le code ; rattache le numéro, ou récupère l'ancien compte lié à ce numéro |

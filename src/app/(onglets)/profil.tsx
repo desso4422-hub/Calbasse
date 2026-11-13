@@ -5,6 +5,7 @@ import { Icone, type NomIcone } from '../../components/Icone';
 import { T } from '../../components/T';
 import { Ecran, Etiquette, TitreSection } from '../../components/ui';
 import { formater } from '../../lib/nutrition.ts';
+import { fonctions } from '../../config';
 import { serveurConfigure } from '../../services/api';
 import { modeReconnaissance } from '../../services/reconnaissance';
 import { estPremium, scansRestants, useStore } from '../../state/store';
@@ -63,13 +64,15 @@ export default function Profil() {
       </View>
 
       <View style={{ gap: 8 }}>
-        <Ligne
-          icone="appareil"
-          titre={premium ? 'Premium actif' : 'Passer à Premium'}
-          texte={premium ? `${scansRestants(etat)} scans restants aujourd'hui` : `${scansRestants(etat)} scans gratuits restants aujourd'hui`}
-          onPress={() => router.push('/premium')}
-        />
-        {serveurConfigure ? (
+        {fonctions.premium ? (
+          <Ligne
+            icone="appareil"
+            titre={premium ? 'Premium actif' : 'Passer à Premium'}
+            texte={premium ? `${scansRestants(etat)} scans restants aujourd'hui` : `${scansRestants(etat)} scans gratuits restants aujourd'hui`}
+            onPress={() => router.push('/premium')}
+          />
+        ) : null}
+        {serveurConfigure && fonctions.telephone ? (
           <Ligne
             icone="telephone"
             titre={etat.serveur?.telephone ? 'Mon numéro' : 'Protéger mon compte'}
@@ -77,13 +80,20 @@ export default function Profil() {
             onPress={() => router.push('/telephone')}
           />
         ) : null}
+        {fonctions.coach ? (
+          <Ligne
+            icone="groupe"
+            titre="Mode coach"
+            texte={aCorriger > 0 ? `${aCorriger} repas de tes clients à corriger` : 'Suis et corrige les repas de tes clients'}
+            onPress={() => router.push('/coach')}
+          />
+        ) : null}
         <Ligne
-          icone="groupe"
-          titre="Mode coach"
-          texte={aCorriger > 0 ? `${aCorriger} repas de tes clients à corriger` : 'Suis et corrige les repas de tes clients'}
-          onPress={() => router.push('/coach')}
+          icone="barres"
+          titre="Charger des repas d'exemple"
+          texte="Remplit les deux dernières semaines pour essayer le Bilan"
+          onPress={() => dispatch({ type: 'chargerDemo' })}
         />
-        <Ligne icone="barres" titre="Charger des repas d'exemple" texte="Remplit les deux dernières semaines pour essayer le Bilan" onPress={() => dispatch({ type: 'chargerDemo' })} />
       </View>
 
       <View style={{ backgroundColor: couleurs.sable, borderRadius: 18, padding: 14, gap: 8 }}>
@@ -94,7 +104,8 @@ export default function Profil() {
           </T>
         </View>
         <T taille={13} interligne={1.45}>
-          Les valeurs nutritionnelles de cette version sont des exemples. Elles seront remplacées par une base sourcée (FAO/INFOODS) validée par un nutritionniste. Calbasse ne remplace pas un avis médical.
+          Les valeurs nutritionnelles de cette version sont des exemples. Elles seront remplacées par une base sourcée (FAO/INFOODS) validée par un nutritionniste. Calbasse ne
+          remplace pas un avis médical.
         </T>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           <Etiquette texte={modeReconnaissance === 'demo' ? 'Reconnaissance : démo' : 'Reconnaissance : serveur'} ton="encre" petite />

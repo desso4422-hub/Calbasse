@@ -78,7 +78,7 @@ async function requete(
       signal: controle.signal,
     });
   } catch {
-    throw new ErreurApi('Pas de connexion au serveur. Vérifie ton réseau et réessaie.', 0, {});
+    throw new ErreurApi(controle.signal.aborted ? 'Le réseau est trop lent.' : 'Pas de connexion au serveur.', 0, {});
   } finally {
     clearTimeout(minuterie);
   }

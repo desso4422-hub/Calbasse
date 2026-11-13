@@ -8,7 +8,7 @@
 import { GoogleGenAI } from '@google/genai';
 import path from 'node:path';
 import { creerApplication } from './app.ts';
-import { Base } from './base.ts';
+import { Base, SCANS_GRATUITS, SCANS_PREMIUM } from './base.ts';
 import { optionsDepuisEnv } from './config.ts';
 import { Journal } from './journal.ts';
 import { smsAfricasTalking, smsConsole } from './sms.ts';
@@ -42,7 +42,10 @@ const sms =
       : null;
 
 const serveur = creerApplication({
-  base: new Base(path.join(dossier, 'calbasse.db'), env.FUSEAU ?? 'Africa/Lagos'),
+  base: new Base(path.join(dossier, 'calbasse.db'), env.FUSEAU ?? 'Africa/Lagos', undefined, {
+    gratuit: Number(env.SCANS_GRATUITS ?? SCANS_GRATUITS),
+    premium: Number(env.SCANS_PREMIUM ?? SCANS_PREMIUM),
+  }),
   vision: new GoogleGenAI({
     apiKey: env.GEMINI_API_KEY,
     ...(env.GEMINI_BASE_URL ? { httpOptions: { baseUrl: env.GEMINI_BASE_URL } } : {}),

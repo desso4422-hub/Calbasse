@@ -49,6 +49,30 @@ export type Abonnement = { plan: 'mensuel' | 'annuel'; jusquau: string };
 
 export type Signalement = { jour: string; alimentId: string; repasNom: string };
 
+/** Un repas photographié sans réseau, analysé dès que la connexion revient */
+export type ScanEnAttente = {
+  cle: string;
+  jour: string;
+  heure: string;
+  creneau: Creneau;
+  indice: string;
+  /** Photo gardée dans le dossier de l'app (null sur le web) */
+  photoUri: string | null;
+  /** Web uniquement : la photo elle-même */
+  photoBase64?: string;
+  statut: 'attente' | 'envoi' | 'pret' | 'echec';
+  essais: number;
+  erreur?: string;
+  resultat?: {
+    nom: string;
+    lignes: LigneRepas[];
+    reconnu: boolean;
+    scanId?: string;
+    inconnus?: { description: string; grammes: number }[];
+    remarque?: string;
+  };
+};
+
 export type Etat = {
   version: 1;
   profil: Profil | null;
@@ -59,6 +83,7 @@ export type Etat = {
   signalements: Signalement[];
   /** Dernier état du compte renvoyé par le serveur (il fait foi pour Premium et les scans) */
   serveur?: { jour: string; scansRestants: number; limite: number; telephone?: string | null };
+  scansEnAttente?: ScanEnAttente[];
 };
 
 export const SCANS_GRATUITS = 2;
@@ -86,6 +111,9 @@ type Action =
   | { type: 'corrigerClient'; id: string; portion: Portion; huile: Huile; message?: string }
   | { type: 'relancerClient'; id: string }
   | { type: 'signaler'; signalement: Signalement }
+  | { type: 'ajouterScanAttente'; scan: ScanEnAttente }
+  | { type: 'majScanAttente'; cle: string; maj: Partial<ScanEnAttente> }
+  | { type: 'retirerScanAttente'; cle: string }
   | { type: 'chargerDemo' }
   | { type: 'reinitialiser' };
 
@@ -144,6 +172,12 @@ function reducteur(etat: Etat, action: Action): Etat {
       return { ...etat, clients: etat.clients.map((c) => (c.id === action.id ? { ...c, joursSansRepas: 0 } : c)) };
     case 'signaler':
       return { ...etat, signalements: [...etat.signalements, action.signalement] };
+    case 'ajouterScanAttente':
+      return { ...etat, scansEnAttente: [...(etat.scansEnAttente ?? []).filter((x) => x.cle !== action.scan.cle), action.scan] };
+    case 'majScanAttente':
+      return { ...etat, scansEnAttente: (etat.scansEnAttente ?? []).map((x) => (x.cle === action.cle ? { ...x, ...action.maj } : x)) };
+    case 'retirerScanAttente':
+      return { ...etat, scansEnAttente: (etat.scansEnAttente ?? []).filter((x) => x.cle !== action.cle) };
     case 'chargerDemo':
       return { ...etat, repas: [...etat.repas.filter((r) => !r.id.startsWith('demo-')), ...repasDemo(new Date())] };
     case 'reinitialiser':
@@ -170,7 +204,11 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       .then((brut) => {
         if (brut) {
           const lu = JSON.parse(brut) as Etat;
-          if (lu.version === 1) dispatch({ type: 'hydrater', etat: { ...etatInitial, ...lu } });
+          if (lu.version === 1) {
+            // Un envoi interrompu par la fermeture de l'app redevient « en attente »
+            const scansEnAttente = (lu.scansEnAttente ?? []).map((x) => (x.statut === 'envoi' ? { ...x, statut: 'attente' as const } : x));
+            dispatch({ type: 'hydrater', etat: { ...etatInitial, ...lu, scansEnAttente } });
+          }
         }
       })
       .catch(() => {})

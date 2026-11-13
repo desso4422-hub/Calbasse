@@ -30,6 +30,8 @@ export type Brouillon = {
   /** Aliments vus sur la photo mais absents de la base */
   inconnus?: { description: string; grammes: number }[];
   remarque?: string;
+  /** Vient d'un scan analysé plus tard (sans réseau au moment de la photo) */
+  cleAttente?: string;
 };
 
 type Valeur = {
@@ -60,11 +62,16 @@ export function nouveauBrouillon(p: {
   scanId?: string;
   inconnus?: { description: string; grammes: number }[];
   remarque?: string;
+  /** Moment de la photo, s'il est différent de maintenant (scan analysé plus tard) */
+  jour?: string;
+  heure?: string;
+  cleAttente?: string;
 }): Brouillon {
   const maintenant = new Date();
   return {
-    jour: cleJour(maintenant),
-    heure: heure(maintenant),
+    jour: p.jour ?? cleJour(maintenant),
+    heure: p.heure ?? heure(maintenant),
+    cleAttente: p.cleAttente,
     nom: p.nom,
     nomFixe: p.mode !== 'manuel',
     lignesBase: p.lignes,

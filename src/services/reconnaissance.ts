@@ -32,6 +32,9 @@ export type ResultatReconnaissance = {
 
 export class ErreurReconnaissance extends Error {}
 
+/** Problème passager (réseau coupé ou lent, serveur occupé) : on pourra réessayer plus tard. */
+export class ErreurReseau extends ErreurReconnaissance {}
+
 /** Plus de scans aujourd'hui (le serveur fait foi) */
 export class ErreurQuota extends ErreurReconnaissance {
   readonly compte?: EtatCompteServeur;
@@ -43,8 +46,8 @@ export class ErreurQuota extends ErreurReconnaissance {
 
 export const modeReconnaissance: 'serveur' | 'demo' = serveurConfigure ? 'serveur' : 'demo';
 
-export async function reconnaitreRepas(params: { photoBase64?: string; indice?: string }): Promise<ResultatReconnaissance> {
-  if (serveurConfigure && params.photoBase64) return reconnaitreSurServeur(params.photoBase64, params.indice ?? '');
+export async function reconnaitreRepas(params: { photoBase64?: string; indice?: string; cle?: string }): Promise<ResultatReconnaissance> {
+  if (serveurConfigure && params.photoBase64) return reconnaitreSurServeur(params.photoBase64, params.indice ?? '', params.cle);
   await new Promise((r) => setTimeout(r, 900));
   return reconnaitreDepuisTexte(params.indice ?? '');
 }
@@ -59,16 +62,22 @@ type ReponseServeur = {
   compte?: EtatCompteServeur;
 };
 
-async function reconnaitreSurServeur(image: string, indice: string): Promise<ResultatReconnaissance> {
+/** Statuts qui valent la peine de réessayer plus tard */
+const PASSAGERS = new Set([0, 408, 429, 500, 502, 503, 504]);
+
+async function reconnaitreSurServeur(image: string, indice: string, cle?: string): Promise<ResultatReconnaissance> {
   let donnees: Partial<ReponseServeur>;
   try {
-    donnees = (await appelApi('/scan', { methode: 'POST', corps: { image, typeImage: 'image/jpeg', indice }, delaiMs: 60_000 })) as Partial<ReponseServeur>;
+    // La clé identifie la photo : si on la renvoie après une coupure, le serveur rend le même
+    // résultat sans nouvelle analyse ni nouveau décompte.
+    donnees = (await appelApi('/scan', { methode: 'POST', corps: { cle, image, typeImage: 'image/jpeg', indice }, delaiMs: 45_000 })) as Partial<ReponseServeur>;
   } catch (e) {
     if (e instanceof ErreurApi && e.code === 'quota') {
       const { premium, scansRestants, limite } = e.donnees as Partial<EtatCompteServeur>;
       const { telephone } = e.donnees as Partial<EtatCompteServeur>;
       throw new ErreurQuota(e.message, limite !== undefined ? { premium: premium ?? null, scansRestants: scansRestants ?? 0, limite, telephone: telephone ?? null } : undefined);
     }
+    if (e instanceof ErreurApi && PASSAGERS.has(e.statut)) throw new ErreurReseau(e.message);
     throw new ErreurReconnaissance(e instanceof ErreurApi ? e.message : 'Analyse impossible. Réessaie.');
   }
 

@@ -62,9 +62,16 @@ export class Base {
   private readonly db: DatabaseSync;
   private readonly fuseau: string;
   private readonly maintenant: () => Date;
+  private readonly limites: { gratuit: number; premium: number };
 
   /** fichier : chemin de la base, ou ':memory:' pour les tests */
-  constructor(fichier: string, fuseau: string, maintenant: () => Date = () => new Date()) {
+  constructor(
+    fichier: string,
+    fuseau: string,
+    maintenant: () => Date = () => new Date(),
+    limites: { gratuit: number; premium: number } = { gratuit: SCANS_GRATUITS, premium: SCANS_PREMIUM },
+  ) {
+    this.limites = limites;
     if (fichier !== ':memory:') mkdirSync(path.dirname(fichier), { recursive: true });
     this.db = new DatabaseSync(fichier);
     this.fuseau = fuseau;
@@ -91,6 +98,13 @@ export class Base {
         cree_le INTEGER NOT NULL,
         expire_le INTEGER NOT NULL,
         essais INTEGER NOT NULL DEFAULT 0
+      );
+      CREATE TABLE IF NOT EXISTS scans_rendus (
+        cle TEXT NOT NULL,
+        compte_id TEXT NOT NULL,
+        reponse TEXT NOT NULL,
+        cree_le INTEGER NOT NULL,
+        PRIMARY KEY (compte_id, cle)
       );
       CREATE TABLE IF NOT EXISTS paiements (
         transaction_id TEXT PRIMARY KEY,
@@ -144,7 +158,7 @@ export class Base {
   // ——— Quota de scans ———
 
   limite(c: Compte): number {
-    return this.estPremium(c) ? SCANS_PREMIUM : SCANS_GRATUITS;
+    return this.estPremium(c) ? this.limites.premium : this.limites.gratuit;
   }
 
   scansUtilises(compteId: string): number {
@@ -161,6 +175,19 @@ export class Base {
     this.db
       .prepare('INSERT INTO scans (compte_id, jour, nombre) VALUES (?, ?, 1) ON CONFLICT (compte_id, jour) DO UPDATE SET nombre = nombre + 1')
       .run(compteId, this.aujourdhui());
+  }
+
+  // ——— Scans déjà rendus (renvoi de la même photo après une coupure réseau) ———
+
+  scanRendu(compteId: string, cle: string): object | null {
+    const l = this.db.prepare('SELECT reponse FROM scans_rendus WHERE compte_id = ? AND cle = ?').get(compteId, cle) as { reponse: string } | undefined;
+    return l ? (JSON.parse(l.reponse) as object) : null;
+  }
+
+  memoriserScan(compteId: string, cle: string, reponse: object): void {
+    const maintenant = this.maintenant().getTime();
+    this.db.prepare('DELETE FROM scans_rendus WHERE cree_le < ?').run(maintenant - 2 * 86_400_000); // 48 h suffisent
+    this.db.prepare('INSERT OR REPLACE INTO scans_rendus (cle, compte_id, reponse, cree_le) VALUES (?, ?, ?, ?)').run(cle, compteId, JSON.stringify(reponse), maintenant);
   }
 
   etatCompte(c: Compte) {
@@ -232,6 +259,7 @@ export class Base {
       this.db.prepare('UPDATE paiements SET compte_id = ? WHERE compte_id = ?').run(garde.id, actuel.id);
       this.db.prepare('DELETE FROM scans WHERE compte_id = ?').run(actuel.id);
       this.db.prepare('DELETE FROM codes_telephone WHERE compte_id = ?').run(actuel.id);
+      this.db.prepare('DELETE FROM scans_rendus WHERE compte_id = ?').run(actuel.id);
       this.db.prepare('DELETE FROM comptes WHERE id = ?').run(actuel.id);
       this.db.exec('COMMIT');
     } catch (e) {

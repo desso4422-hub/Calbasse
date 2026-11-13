@@ -23,8 +23,16 @@ const repas: ReponseModele = {
   remarque: '',
 };
 const pasUnRepas: ReponseModele = { estUnRepas: false, nomDuPlat: '', confianceGlobale: 'basse', composants: [], remarque: 'Un chat.' };
+let appelsVision = 0;
+let delaiVision = 0;
 const vision: ClientVision = {
-  models: { generateContent: async () => ({ text: JSON.stringify(prochaineReponse), candidates: [{ finishReason: 'STOP' }] }) as unknown as GenerateContentResponse },
+  models: {
+    generateContent: async () => {
+      appelsVision += 1;
+      if (delaiVision) await new Promise((r) => setTimeout(r, delaiVision));
+      return { text: JSON.stringify(prochaineReponse), candidates: [{ finishReason: 'STOP' }] } as unknown as GenerateContentResponse;
+    },
+  },
 };
 
 /** Faux CinetPay : statut renvoyé par /payment/check, et appels reçus */
@@ -262,4 +270,38 @@ test('téléphone : limites contre les abus et numéros invalides', async () => 
   horloge = new Date(avant.getTime() + 11 * 60_000);
   assert.equal((await appel('/telephone/verifier', { jeton: autre, corps: { numero: n3, code: dernierCode(n3) } })).json.code, 'expire');
   horloge = avant;
+});
+
+test('même photo renvoyée (coupure réseau) : une seule analyse, un seul scan décompté', async () => {
+  const jeton = await nouveauCompte();
+  prochaineReponse = repas;
+  const avant = appelsVision;
+  const r1 = await appel('/scan', { jeton, corps: { ...photo, cle: 'photo-0001-abcd' } });
+  const r2 = await appel('/scan', { jeton, corps: { ...photo, cle: 'photo-0001-abcd' } });
+  assert.equal(r1.statut, 200);
+  assert.equal(r2.json.scanId, r1.json.scanId);
+  assert.equal(appelsVision - avant, 1);
+  assert.equal((r2.json.compte as { scansRestants: number }).scansRestants, 1);
+
+  // Deux envois simultanés de la même photo : une seule analyse
+  delaiVision = 150;
+  const [a, b] = await Promise.all([
+    appel('/scan', { jeton, corps: { ...photo, cle: 'photo-0002-abcd' } }),
+    appel('/scan', { jeton, corps: { ...photo, cle: 'photo-0002-abcd' } }),
+  ]);
+  delaiVision = 0;
+  assert.equal(a.json.scanId, b.json.scanId);
+  assert.equal(appelsVision - avant, 2);
+  assert.equal((await appel('/compte', { jeton })).json.scansRestants, 0);
+
+  // Le résultat déjà rendu reste disponible même quota épuisé ; une nouvelle photo, non
+  assert.equal((await appel('/scan', { jeton, corps: { ...photo, cle: 'photo-0001-abcd' } })).statut, 200);
+  assert.equal((await appel('/scan', { jeton, corps: { ...photo, cle: 'photo-0003-abcd' } })).statut, 402);
+});
+
+test('quota gratuit réglable (testeurs du MVP)', () => {
+  const b = new Base(':memory:', 'Africa/Lagos', () => horloge, { gratuit: 10, premium: 30 });
+  const { compte } = b.creerCompte();
+  assert.equal(b.scansRestants(compte), 10);
+  b.fermer();
 });

@@ -4,7 +4,9 @@ import { Pressable, View } from 'react-native';
 import { Anneau, Assiette, Jauge } from '../../components/Graphiques';
 import { Icone } from '../../components/Icone';
 import { T } from '../../components/T';
+import { CarteScanEnAttente } from '../../components/ScanEnAttente';
 import { Ecran } from '../../components/ui';
+import { fonctions } from '../../config';
 import {
   additionner,
   ajouterJours,
@@ -49,7 +51,7 @@ export default function Aujourdhui() {
   const premium = estPremium(etat);
 
   // Prochain créneau principal à remplir (aujourd'hui seulement)
-  const pris = new Set(repas.map((r) => r.creneau));
+  const pris = new Set([...repas.map((r) => r.creneau), ...(etat.scansEnAttente ?? []).filter((x) => x.jour === jour).map((x) => x.creneau)]);
   const principaux: Creneau[] = ['petitDej', 'dejeuner', 'diner'];
   const actuel = creneauPourHeure(aujourdhui);
   const prochain: Creneau =
@@ -68,14 +70,18 @@ export default function Aujourdhui() {
           </T>
         </View>
         <Pressable
-          onPress={() => router.push('/premium')}
+          onPress={() => (fonctions.premium ? router.push('/premium') : router.push('/scanner'))}
           accessibilityRole="button"
-          accessibilityLabel={premium ? `Premium, ${restants} scans restants` : `${restants} scans gratuits restants. Passer à Premium`}
+          accessibilityLabel={premium ? `Premium, ${restants} scans restants` : fonctions.premium ? `${restants} scans gratuits restants. Passer à Premium` : `${restants} scans restants aujourd'hui`}
           style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: couleurs.terreDouce, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 12 }}
         >
           <Icone nom="appareil" taille={16} couleur={couleurs.terreFoncee} />
           <T g={700} taille={12} couleur={couleurs.terreFoncee}>
-            {premium ? `Premium · ${restants}` : `${restants} scan${restants > 1 ? 's' : ''} gratuit${restants > 1 ? 's' : ''}`}
+            {premium
+              ? `Premium · ${restants}`
+              : fonctions.premium
+                ? `${restants} scan${restants > 1 ? 's' : ''} gratuit${restants > 1 ? 's' : ''}`
+                : `${restants} scan${restants > 1 ? 's' : ''} restant${restants > 1 ? 's' : ''}`}
           </T>
         </Pressable>
       </View>
@@ -176,6 +182,12 @@ export default function Aujourdhui() {
         <T g={800} taille={17}>
           {estAujourdhui ? "Repas d'aujourd'hui" : 'Repas de ce jour'}
         </T>
+        {(etat.scansEnAttente ?? [])
+          // Aujourd'hui, on montre aussi les scans des jours précédents qui attendent encore
+          .filter((x) => x.jour === jour || (estAujourdhui && x.jour < jour))
+          .map((x) => (
+            <CarteScanEnAttente key={x.cle} scan={x} />
+          ))}
         {repas.map((r) => {
           const t = arrondirNutriments(totalRepas(r.lignes, r.huile));
           return (

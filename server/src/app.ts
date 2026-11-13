@@ -5,7 +5,9 @@
  *   GET  /sante                    état du serveur
  *   POST /comptes                  crée un compte anonyme → { jeton, premium, scansRestants, limite }
  *   GET  /compte              🔒   état du compte (Premium, scans restants)
- *   POST /scan                🔒   { image, typeImage?, indice? } → aliments reconnus (décompte 1 scan)
+ *   POST /scan                🔒   { cle?, image, typeImage?, indice? } → aliments reconnus (décompte 1 scan)
+ *                                  cle : identifiant unique de la photo ; un renvoi avec la même clé
+ *                                  rend le même résultat sans nouvelle analyse ni nouveau décompte
  *   POST /corrections         🔒   { scanId, proposees, finales }
  *   POST /telephone/code      🔒   { numero, indicatif? } → envoie un code par SMS
  *   POST /telephone/verifier  🔒   { numero, indicatif?, code } → rattache le numéro, ou récupère l'ancien compte
@@ -103,6 +105,8 @@ export function creerApplication(d: Dependances): Server {
   const http = d.http ?? fetch;
   const limiteRequetes = new Limiteur(d.requetesParHeure ?? 120);
   const limiteComptes = new Limiteur(d.comptesParHeure ?? 10);
+  /** Analyses en cours, par compte et clé de photo : un renvoi pendant l'analyse attend la même réponse */
+  const scansEnCours = new Map<string, Promise<{ statut: number; corps: object }>>();
 
   const ip = (req: IncomingMessage) =>
     (d.derriereProxy ? (req.headers['x-forwarded-for'] as string | undefined)?.split(',')[0].trim() : undefined) ?? req.socket.remoteAddress ?? '?';
@@ -173,42 +177,63 @@ export function creerApplication(d: Dependances): Server {
     if (methode === 'GET' && chemin === '/compte') return repondre(res, 200, base.etatCompte(compte));
 
     if (methode === 'POST' && chemin === '/scan') {
-      if (base.scansRestants(compte) <= 0) {
-        return repondre(res, 402, { erreur: 'Tu as utilisé tous tes scans du jour.', code: 'quota', ...base.etatCompte(compte) });
-      }
       let corps: Record<string, unknown>;
       try {
         corps = await lireJson(req);
       } catch {
         return repondre(res, 400, { erreur: 'Requête illisible ou photo trop lourde.' });
       }
+      const cle = typeof corps.cle === 'string' && /^[\w-]{8,64}$/.test(corps.cle) ? corps.cle : null;
+      if (cle) {
+        // Même photo renvoyée (réseau coupé pendant la réponse) : même résultat, pas de nouveau décompte
+        const deja = base.scanRendu(compte.id, cle);
+        if (deja) return repondre(res, 200, { ...deja, compte: base.etatCompte(base.compte(compte.id)!) });
+        const enCours = scansEnCours.get(`${compte.id}:${cle}`);
+        if (enCours) {
+          const r = await enCours;
+          return repondre(res, r.statut, r.corps);
+        }
+      }
+      if (base.scansRestants(compte) <= 0) {
+        return repondre(res, 402, { erreur: 'Tu as utilisé tous tes scans du jour.', code: 'quota', ...base.etatCompte(compte) });
+      }
       const image = typeof corps.image === 'string' ? corps.image.replace(/^data:[^,]+,/, '') : '';
       const typeImage = (TYPES.includes(corps.typeImage as TypeImage) ? corps.typeImage : 'image/jpeg') as TypeImage;
       const indice = typeof corps.indice === 'string' ? corps.indice : '';
       if (!image) return repondre(res, 400, { erreur: 'Photo manquante.' });
 
-      const scanId = randomUUID();
-      const debut = Date.now();
-      try {
-        const { resultat, brut, usage } = await analyserRepas(d.vision, image, typeImage, indice, options);
-        // Une photo sans nourriture ne coûte pas de scan à l'utilisateur
-        if (resultat.estUnRepas) base.compterScan(compte.id);
-        await journal
-          .scan(scanId, { compteId: compte.id, indice, modele: options.modele, reflexion: options.reflexion ?? 'défaut', dureeMs: Date.now() - debut, brut, usage }, image)
-          .catch(() => {});
-        return repondre(res, 200, { scanId, ...resultat, compte: base.etatCompte(compte) });
-      } catch (e) {
-        await journal.scan(scanId, { compteId: compte.id, indice, erreur: String(e) }).catch(() => {});
-        if (e instanceof RefusModele) return repondre(res, 422, { erreur: "Cette photo n'a pas pu être analysée." });
-        if (e instanceof ReponseIllisible) return repondre(res, 502, { erreur: 'Analyse incomplète, réessaie.' });
-        if (e instanceof ApiError && e.status === 429) return repondre(res, 503, { erreur: 'Service très demandé, réessaie dans un instant.' });
-        if (e instanceof ApiError) {
-          console.error(`Erreur API Gemini ${e.status}:`, e.message);
-          return repondre(res, 502, { erreur: 'Analyse indisponible pour le moment.' });
+      const analyse = (async (): Promise<{ statut: number; corps: object }> => {
+        const scanId = randomUUID();
+        const debut = Date.now();
+        try {
+          const { resultat, brut, usage } = await analyserRepas(d.vision, image, typeImage, indice, options);
+          // Une photo sans nourriture ne coûte pas de scan à l'utilisateur
+          if (resultat.estUnRepas) base.compterScan(compte.id);
+          await journal
+            .scan(scanId, { compteId: compte.id, cle, indice, modele: options.modele, reflexion: options.reflexion ?? 'défaut', dureeMs: Date.now() - debut, brut, usage }, image)
+            .catch(() => {});
+          const reponse = { scanId, ...resultat };
+          if (cle) base.memoriserScan(compte.id, cle, reponse);
+          return { statut: 200, corps: { ...reponse, compte: base.etatCompte(base.compte(compte.id)!) } };
+        } catch (e) {
+          await journal.scan(scanId, { compteId: compte.id, cle, indice, erreur: String(e) }).catch(() => {});
+          if (e instanceof RefusModele) return { statut: 422, corps: { erreur: "Cette photo n'a pas pu être analysée." } };
+          if (e instanceof ReponseIllisible) return { statut: 502, corps: { erreur: 'Analyse incomplète, réessaie.' } };
+          if (e instanceof ApiError && e.status === 429) return { statut: 503, corps: { erreur: 'Service très demandé, réessaie dans un instant.' } };
+          if (e instanceof ApiError) {
+            console.error(`Erreur API Gemini ${e.status}:`, e.message);
+            return { statut: 502, corps: { erreur: 'Analyse indisponible pour le moment.' } };
+          }
+          console.error(e);
+          return { statut: 500, corps: { erreur: 'Erreur interne.' } };
         }
-        console.error(e);
-        return repondre(res, 500, { erreur: 'Erreur interne.' });
+      })();
+      if (cle) {
+        scansEnCours.set(`${compte.id}:${cle}`, analyse);
+        analyse.finally(() => scansEnCours.delete(`${compte.id}:${cle}`));
       }
+      const r = await analyse;
+      return repondre(res, r.statut, r.corps);
     }
 
     if (methode === 'POST' && chemin === '/corrections') {

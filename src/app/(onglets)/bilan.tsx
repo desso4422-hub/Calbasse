@@ -4,6 +4,7 @@ import { Pressable, View } from 'react-native';
 import { Icone } from '../../components/Icone';
 import { T } from '../../components/T';
 import { Bouton, Ecran, Etiquette } from '../../components/ui';
+import { fonctions } from '../../config';
 import { calculerBilan } from '../../lib/bilan.ts';
 import { additionner, ajouterJours, arrondirNutriments, formater, joursCourts, lundi, periode, totalRepas, zero } from '../../lib/nutrition.ts';
 import { estPremium, repasDuJour, useStore } from '../../state/store';
@@ -33,7 +34,7 @@ export default function Bilan() {
   const ligneObjectif = hauteurBarre(cibles.prot);
 
   // En gratuit, seul le bilan de la semaine en cours est ouvert
-  const verrouille = !premium && decalage < 0;
+  const verrouille = fonctions.premium && !premium && decalage < 0;
 
   return (
     <Ecran espaceBas={28}>

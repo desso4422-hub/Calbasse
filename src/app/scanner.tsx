@@ -8,10 +8,13 @@ import { Assiette } from '../components/Graphiques';
 import { Icone, type NomIcone } from '../components/Icone';
 import { T } from '../components/T';
 import { BoutonRond } from '../components/ui';
+import { fonctions } from '../config';
 import { preparerPhoto } from '../services/photo';
-import { ErreurQuota, ErreurReconnaissance, modeReconnaissance, reconnaitreRepas } from '../services/reconnaissance';
+import { garderPhoto } from '../services/photosEnAttente';
+import { ErreurQuota, ErreurReconnaissance, ErreurReseau, modeReconnaissance, reconnaitreRepas } from '../services/reconnaissance';
 import { nouveauBrouillon, useBrouillon } from '../state/brouillon';
-import { estPremium, scansRestants, useStore } from '../state/store';
+import { cleJour, heure } from '../lib/nutrition.ts';
+import { creneauPourHeure, estPremium, nouvelId, scansRestants, useStore } from '../state/store';
 import { couleurs, polices } from '../theme';
 
 const COTE = 340;
@@ -32,16 +35,74 @@ export default function Scanner() {
 
   const [erreur, setErreur] = useState<string | null>(null);
 
+  // Plus de scans aujourd'hui : Premium si le paiement est activé, sinon un message clair
+  const quotaAtteint = () => {
+    if (fonctions.premium) router.push('/premium');
+    else setErreur('Tu as utilisé tous tes scans du jour. Reviens demain, ou choisis ton plat dans la liste : ça ne compte pas.');
+  };
+
+  // Étape affichée pendant l'analyse, et scan en cours (pour pouvoir le mettre de côté)
+  const [etape, setEtape] = useState<'envoi' | 'analyse' | 'lent' | 'nouvel-essai'>('envoi');
+  const courant = useRef<{ cle: string; base64: string; indice: string } | null>(null);
+  const misDeCote = useRef(false);
+
+  /** Garde la photo et l'analyse plus tard, dès que le réseau le permet. */
+  const mettreDeCote = async () => {
+    const scan = courant.current;
+    if (!scan || misDeCote.current) return;
+    misDeCote.current = true;
+    const maintenant = new Date();
+    const photoUri = await garderPhoto(scan.cle, scan.base64).catch(() => null);
+    dispatch({
+      type: 'ajouterScanAttente',
+      scan: {
+        cle: scan.cle,
+        jour: cleJour(maintenant),
+        heure: heure(maintenant),
+        creneau: creneauPourHeure(maintenant),
+        indice: scan.indice,
+        photoUri,
+        photoBase64: photoUri ? undefined : scan.base64,
+        statut: 'attente',
+        essais: 1,
+      },
+    });
+    router.dismissTo('/(onglets)');
+  };
+
   const analyser = async (photo: { uri: string; width: number; height: number }) => {
     if (restants <= 0) {
-      router.push('/premium');
+      quotaAtteint();
       return;
     }
     setAnalyse(true);
     setErreur(null);
+    setEtape('envoi');
+    misDeCote.current = false;
+    const minuteries = [setTimeout(() => setEtape('analyse'), 4000), setTimeout(() => setEtape('lent'), 15000)];
     try {
       const preparee = modeReconnaissance === 'serveur' ? await preparerPhoto(photo) : { uri: photo.uri, base64: undefined };
-      const r = await reconnaitreRepas({ photoBase64: preparee.base64, indice });
+      const cle = nouvelId();
+      if (preparee.base64) courant.current = { cle, base64: preparee.base64, indice };
+
+      // Deux essais ; si le réseau ne suit toujours pas, la photo est mise de côté (pas perdue)
+      let r: Awaited<ReturnType<typeof reconnaitreRepas>> | null = null;
+      for (let essai = 1; essai <= 2 && !r; essai++) {
+        try {
+          r = await reconnaitreRepas({ photoBase64: preparee.base64, indice, cle });
+        } catch (e) {
+          if (!(e instanceof ErreurReseau) || !courant.current) throw e;
+          if (misDeCote.current) return;
+          if (essai === 2) {
+            await mettreDeCote();
+            return;
+          }
+          setEtape('nouvel-essai');
+          await new Promise((ok) => setTimeout(ok, 2000));
+        }
+      }
+      // L'utilisateur a choisi de ne pas attendre : le résultat sera repris par la file d'attente
+      if (misDeCote.current || !r) return;
       if (r.compte) dispatch({ type: 'majCompteServeur', compte: r.compte });
       if (r.pasUnRepas) {
         // Pas de nourriture sur la photo : on ne décompte pas le scan.
@@ -63,19 +124,22 @@ export default function Scanner() {
       );
       router.replace('/resultat');
     } catch (e) {
+      if (misDeCote.current) return;
       if (e instanceof ErreurQuota) {
         if (e.compte) dispatch({ type: 'majCompteServeur', compte: e.compte });
-        router.push('/premium');
+        quotaAtteint();
         return;
       }
       setErreur(e instanceof ErreurReconnaissance ? e.message : 'Analyse impossible. Réessaie, ou choisis ton plat dans la liste.');
     } finally {
+      minuteries.forEach(clearTimeout);
+      courant.current = null;
       setAnalyse(false);
     }
   };
 
   const photographier = async () => {
-    if (restants <= 0) return router.push('/premium');
+    if (restants <= 0) return quotaAtteint();
     if (!camera.current || !pret) return;
     try {
       const photo = await camera.current.takePictureAsync({ quality: 0.8 });
@@ -86,7 +150,7 @@ export default function Scanner() {
   };
 
   const galerie = async () => {
-    if (restants <= 0) return router.push('/premium');
+    if (restants <= 0) return quotaAtteint();
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
     if (!res.canceled && res.assets[0]) await analyser(res.assets[0]);
   };
@@ -99,12 +163,15 @@ export default function Scanner() {
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}>
           <BoutonRond icone="croix" label="Fermer le scanner" fond={couleurs.nuit2} couleur={couleurs.sable} onPress={() => router.back()} />
           <Pressable
-            onPress={() => router.push('/premium')}
+            onPress={() => (fonctions.premium ? router.push('/premium') : undefined)}
+            disabled={!fonctions.premium}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: couleurs.nuit2, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 14 }}
           >
             <Icone nom="appareil" taille={16} couleur={couleurs.sable} />
             <T g={700} taille={13} couleur={couleurs.sable}>
-              {premium ? `${restants} scans restants` : `${restants} scan${restants > 1 ? 's' : ''} gratuit${restants > 1 ? 's' : ''} aujourd'hui`}
+              {premium || !fonctions.premium
+                ? `${restants} scan${restants > 1 ? 's' : ''} restant${restants > 1 ? 's' : ''} aujourd'hui`
+                : `${restants} scan${restants > 1 ? 's' : ''} gratuit${restants > 1 ? 's' : ''} aujourd'hui`}
             </T>
           </Pressable>
           <BoutonRond
@@ -139,11 +206,36 @@ export default function Scanner() {
             )}
             <Coins />
             {analyse ? (
-              <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(30,18,11,0.72)', alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+              <View
+                accessibilityLiveRegion="polite"
+                style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, backgroundColor: 'rgba(30,18,11,0.78)', alignItems: 'center', justifyContent: 'center', gap: 12, padding: 20 }}
+              >
                 <ActivityIndicator color={couleurs.sable} size="large" />
-                <T g={700} taille={15} couleur={couleurs.sable}>
-                  On regarde ton assiette…
+                <T g={700} taille={16} couleur={couleurs.sable} centre>
+                  {etape === 'envoi'
+                    ? 'Envoi de la photo…'
+                    : etape === 'analyse'
+                      ? 'On regarde ton assiette…'
+                      : etape === 'nouvel-essai'
+                        ? 'Connexion coupée, nouvel essai…'
+                        : 'Le réseau est lent, on continue…'}
                 </T>
+                {(etape === 'lent' || etape === 'nouvel-essai') && modeReconnaissance === 'serveur' ? (
+                  <>
+                    <Pressable
+                      onPress={mettreDeCote}
+                      accessibilityRole="button"
+                      style={{ marginTop: 6, backgroundColor: couleurs.sable, borderRadius: 14, paddingVertical: 11, paddingHorizontal: 16 }}
+                    >
+                      <T g={700} taille={14}>
+                        Continuer sans attendre
+                      </T>
+                    </Pressable>
+                    <T g={500} taille={12} couleur={couleurs.sableClair} centre interligne={1.4}>
+                      Ta photo est gardée : le repas sera analysé dès que le réseau le permet.
+                    </T>
+                  </>
+                ) : null}
               </View>
             ) : null}
           </View>

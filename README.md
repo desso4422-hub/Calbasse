@@ -29,6 +29,20 @@ npm run typecheck
 npm test
 ```
 
+## Version MVP : tout autour du scan
+
+Cette version est centrée sur la fonction principale : **scanner son plat**. Par défaut, le mode coach, le paiement Premium et le numéro de téléphone sont masqués (leur code est conservé dans le projet). Le quota de scans gratuits se règle sur le serveur (`SCANS_GRATUITS`, par exemple 10 pour les testeurs) ; quand il est épuisé, l'app le dit simplement et propose de choisir le plat dans la liste.
+
+Pour tout réafficher : `EXPO_PUBLIC_MVP=0` dans `.env.local` (voir `src/config.ts`).
+
+### Le scan sur le terrain (réseau lent ou coupé)
+
+- **Photo légère** : 1280 px, JPEG compressé (~120-200 Ko).
+- **Attente expliquée** : « Envoi de la photo… », « On regarde ton assiette… », puis « Le réseau est lent, on continue… » avec un bouton **Continuer sans attendre**.
+- **Nouvel essai automatique** si la connexion coupe pendant l'envoi.
+- **Aucune photo perdue** : si le réseau ne suit pas, ou si l'utilisateur ne veut pas attendre, la photo est gardée sur le téléphone et le repas apparaît dans Aujourd'hui (« En attente de réseau »). Il est analysé automatiquement dès que la connexion revient, puis passe à « Prêt à vérifier ». Ça marche aussi si l'app est fermée entre-temps.
+- **Jamais compté deux fois** : chaque photo porte une clé unique. Si elle est renvoyée (coupure pendant la réponse, file d'attente), le serveur rend le même résultat sans refaire l'analyse ni décompter un scan.
+
 ## Écrans
 
 | Maquette | Fichier |
@@ -105,8 +119,14 @@ Tout est stocké sur le téléphone (AsyncStorage). Dans Profil : « Charger des
 
 ## Prochaines étapes
 
-1. Remplacer la base d'aliments par des valeurs sourcées, validées par un nutritionniste.
-2. Constituer un jeu de photos réelles étiquetées et mesurer la reconnaissance (`server/eval/`), puis choisir le modèle Gemini et le niveau de réflexion selon la précision et le coût.
-3. Vérifier les modules CinetPay et Africa's Talking avec leur documentation, puis de vrais petits paiements et SMS.
-4. Sauvegarde des repas sur le serveur (historique retrouvé avec le compte), puis mode coach relié.
-5. Construire les apps avec EAS (`npx eas-cli@latest build`).
+Pour le MVP (scan) :
+
+1. Brancher une vraie clé Gemini et mesurer la reconnaissance sur de vraies photos (`server/eval/`), puis ajuster les descriptions des aliments les plus confondus.
+2. Déployer le serveur (HTTPS) et distribuer l'app aux testeurs (APK Android via EAS).
+3. Remplacer la base d'aliments par des valeurs sourcées, validées par un nutritionniste.
+
+Après le MVP :
+
+1. Choisir le modèle Gemini et le niveau de réflexion selon la précision mesurée et le coût par scan.
+2. Rallumer le paiement (vérifier CinetPay avec sa documentation et de vrais petits paiements) et le numéro de téléphone (Africa's Talking).
+3. Sauvegarde des repas sur le serveur (historique retrouvé avec le compte), puis mode coach relié.

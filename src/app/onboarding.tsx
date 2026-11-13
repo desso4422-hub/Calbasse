@@ -6,6 +6,7 @@ import { Icone, type NomIcone } from '../components/Icone';
 import { T } from '../components/T';
 import { Bouton, BoutonRond, Carte, Choix, Ecran, Segment } from '../components/ui';
 import { calculerCibles, formater, type Activite, type Mesures, type Objectif, type Sexe } from '../lib/nutrition.ts';
+import { fonctions } from '../config';
 import { serveurConfigure } from '../services/api';
 import { useStore } from '../state/store';
 import { couleurs, polices } from '../theme';
@@ -59,7 +60,7 @@ export default function Onboarding() {
           Attiéké, pâte, riz au gras, sauces, huile : Calbasse connaît tes plats.
         </T>
         <Bouton titre="Continuer" onPress={() => setEtape(2)} />
-        {serveurConfigure && !existant ? (
+        {serveurConfigure && fonctions.telephone && !existant ? (
           <Bouton variante="lien" titre="J’ai déjà un compte Premium" onPress={() => router.push({ pathname: '/telephone', params: { mode: 'recuperer' } })} />
         ) : null}
       </>

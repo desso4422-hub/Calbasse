@@ -8,6 +8,7 @@ import { T } from '../components/T';
 import { Bouton, BoutonRond, Segment } from '../components/ui';
 import { trouverAliment } from '../lib/aliments.ts';
 import { arrondirNutriments, formater, fourchette, totalRepas, type Huile, type Portion } from '../lib/nutrition.ts';
+import { supprimerPhoto } from '../services/photosEnAttente';
 import { envoyerCorrection } from '../services/reconnaissance';
 import { lignesEffectives, nomBrouillon, useBrouillon, versRepas } from '../state/brouillon';
 import { nomsCreneaux, ordreCreneaux, useStore } from '../state/store';
@@ -15,7 +16,7 @@ import { couleurs } from '../theme';
 
 export default function Resultat() {
   const insets = useSafeAreaInsets();
-  const { dispatch } = useStore();
+  const { etat, dispatch } = useStore();
   const { brouillon, setBrouillon } = useBrouillon();
   if (!brouillon) return <Redirect href="/(onglets)" />;
   const b = brouillon;
@@ -48,6 +49,11 @@ export default function Resultat() {
     const repas = versRepas(b);
     if (b.scanId && b.lignesProposees) envoyerCorrection(b.scanId, b.lignesProposees, lignes);
     dispatch({ type: 'enregistrerRepas', repas });
+    if (b.cleAttente) {
+      // Le repas mis de côté est enregistré : on libère sa photo
+      supprimerPhoto(etat.scansEnAttente?.find((x) => x.cle === b.cleAttente)?.photoUri);
+      dispatch({ type: 'retirerScanAttente', cle: b.cleAttente });
+    }
     setBrouillon(null);
     router.dismissTo('/(onglets)');
   };
