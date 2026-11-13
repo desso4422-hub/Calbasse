@@ -1,0 +1,29 @@
+# Déploiement du serveur Calbasse sur Render (offre gratuite).
+# Render → New → Blueprint → choisir ce dépôt : ce fichier crée le service tout seul.
+services:
+  - type: web
+    name: calbasse
+    runtime: node
+    plan: free
+    # Tout le dépôt est nécessaire : le serveur lit la base d'aliments dans src/lib
+    buildCommand: cd server && npm install
+    startCommand: cd server && node --experimental-strip-types src/index.ts
+    healthCheckPath: /sante
+    envVars:
+      - key: NODE_VERSION
+        value: "22.23.0"
+      # Ta clé RodiumAI : Render te la demandera au moment du déploiement
+      - key: RODIUMAI_API_KEY
+        sync: false
+      - key: RODIUMAI_MODELE
+        value: google/gemini-3.1-flash-lite
+      # MVP : 10 scans par jour pour les testeurs
+      - key: SCANS_GRATUITS
+        value: "10"
+      - key: DERRIERE_PROXY
+        value: "1"
+      - key: FUSEAU
+        value: Africa/Lagos
+      # Offre gratuite : pas de disque permanent, les données repartent à zéro à chaque redémarrage
+      - key: DATA_DIR
+        value: /tmp/calbasse
