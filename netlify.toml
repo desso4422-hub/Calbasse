@@ -1,0 +1,37 @@
+# Déploiement de Calbasse sur Netlify : la PWA et le serveur au même endroit.
+# La clé du modèle (RODIUMAI_API_KEY) se règle dans Netlify, jamais dans ce fichier.
+
+[build]
+  command = "npm install --prefix server && npm run build:netlify"
+  publish = "dist"
+  functions = "netlify/fonctions"
+
+[functions]
+  node_bundler = "esbuild"
+
+[build.environment]
+  NODE_VERSION = "22.23.4"
+
+# /api/scan → le serveur
+[[redirects]]
+  from = "/api/*"
+  to = "/.netlify/functions/api/:splat"
+  status = 200
+  force = true
+
+# Le reste : la PWA, qui gère elle-même ses écrans
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/_expo/static/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"

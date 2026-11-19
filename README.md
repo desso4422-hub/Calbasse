@@ -47,14 +47,16 @@ Pour tout réafficher : `EXPO_PUBLIC_MVP=0` dans `.env.local` (voir `src/config.
 
 Calbasse s'utilise comme une **PWA** : une page web qui s'installe sur l'écran d'accueil comme une app (Android et iPhone), sans Play Store. Appareil photo, galerie et ouverture hors ligne fonctionnent.
 
-Hébergement prévu : **[Vercel](https://vercel.com)** (offre gratuite, connexion avec GitHub). La page et le serveur sont au même endroit, le serveur répond sous `/api`, et la clé RodiumAI reste côté serveur.
+Hébergement : **[Netlify](https://netlify.com)** (offre gratuite, connexion avec GitHub). La page et le serveur sont au même endroit, le serveur répond sous `/api`, et la clé RodiumAI reste côté serveur.
 
-1. Sur vercel.com : **Add New → Project**, choisir le dépôt `calbasse` et la branche de travail.
-2. Dans **Environment Variables**, ajouter `RODIUMAI_API_KEY` (ta clé RodiumAI) et, pour les testeurs, `SCANS_GRATUITS=10`.
-3. **Deploy**. Vercel lit `vercel.json` et lance `npm run build:vercel`.
-4. Sur le téléphone, ouvrir l'adresse donnée par Vercel, puis : **Android (Chrome)** menu ⋮ → « Installer l'application » ; **iPhone (Safari)** bouton Partager → « Sur l'écran d'accueil ».
+1. Sur netlify.com : **Add new site → Import an existing project**, choisir GitHub puis le dépôt `calbasse` et la branche de travail.
+2. Dans **Environment variables**, ajouter `RODIUMAI_API_KEY` (ta clé RodiumAI) et, pour les testeurs, `SCANS_GRATUITS=10`.
+3. **Deploy**. Netlify lit `netlify.toml` : il publie `dist` et met le serveur dans une fonction appelée sous `/api`.
+4. Sur le téléphone, ouvrir l'adresse donnée par Netlify, puis : **Android (Chrome)** menu ⋮ → « Installer l'application » ; **iPhone (Safari)** bouton Partager → « Sur l'écran d'accueil ».
 
-Pour vérifier la construction en local : `npm run build:vercel` (résultat dans `.vercel/output`). Sur l'offre gratuite, les comptes et compteurs de scans vivent dans `/tmp` et repartent parfois à zéro.
+Pour vérifier la construction en local : `npm run build:netlify` (résultat dans `dist` et `netlify/fonctions`). Sur l'offre gratuite, les comptes et compteurs de scans vivent dans `/tmp` et repartent parfois à zéro ; une analyse doit tenir dans les 10 secondes allouées à une fonction (elle en prend 2 à 4).
+
+Le déploiement sur Vercel reste possible : `vercel.json` et `npm run build:vercel` (résultat dans `.vercel/output`).
 
 ## Écrans
 

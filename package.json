@@ -44,7 +44,8 @@
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types src/lib/*.test.ts",
     "lint": "expo lint",
-    "build:vercel": "node scripts/vercel-build.mjs"
+    "build:vercel": "node scripts/vercel-build.mjs",
+    "build:netlify": "node scripts/netlify-build.mjs"
   },
   "private": true
 }
