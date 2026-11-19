@@ -10,13 +10,13 @@
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://calbasse.onrender.com"
+        "EXPO_PUBLIC_VISION_DIRECTE": "1"
       }
     },
     "production": {
       "autoIncrement": true,
       "env": {
-        "EXPO_PUBLIC_API_URL": "https://calbasse.onrender.com"
+        "EXPO_PUBLIC_VISION_DIRECTE": "1"
       }
     }
   }
