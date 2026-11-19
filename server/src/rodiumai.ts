@@ -5,8 +5,9 @@
  * photo en data URL, réponse JSON demandée par response_format (json_schema, puis json_object
  * si la passerelle ne prend pas le schéma). Documentation : https://www.rodiumai.io/docs
  */
+import { corpsRodium } from '../../src/lib/vision.ts';
 import type { ClientHttp } from './cinetpay.ts';
-import { schemaJson, ErreurFournisseur, type Fournisseur } from './reconnaissance.ts';
+import { ErreurFournisseur, type Fournisseur } from './reconnaissance.ts';
 
 export type ConfigRodium = {
   cleApi: string;
@@ -48,39 +49,13 @@ export function fournisseurRodium(config: ConfigRodium, http: ClientHttp = fetch
   return {
     nom: 'rodiumai',
     async generer({ systeme, image, typeImage, texte, options }) {
-      const base = {
-        model: options.modele,
-        max_tokens: 8192,
-        messages: [
-          { role: 'system', content: systeme },
-          {
-            role: 'user',
-            content: [
-              { type: 'image_url', image_url: { url: `data:${typeImage};base64,${image}` } },
-              { type: 'text', text: texte },
-            ],
-          },
-        ],
-        ...(options.reflexion ? { reasoning_effort: efforts[options.reflexion] } : {}),
-      };
-      const avecSchema = { ...base, response_format: { type: 'json_schema', json_schema: { name: 'repas', schema: schemaJson } } };
-      // Sans schéma : on rappelle le format attendu dans la demande
-      const sansSchema = {
-        ...base,
-        response_format: { type: 'json_object' },
-        messages: [
-          base.messages[0],
-          {
-            ...base.messages[1],
-            content: [...(base.messages[1].content as object[]), { type: 'text', text: `Réponds uniquement avec un objet JSON conforme à ce schéma :\n${JSON.stringify(schemaJson)}` }],
-          },
-        ],
-      };
+      const corps = (avecSchema: boolean) =>
+        corpsRodium({ systeme, texte, image, typeImage, modele: options.modele, reflexion: options.reflexion, avecSchema });
 
-      let { statut, donnees } = await appeler(schemaAccepte ? avecSchema : sansSchema);
+      let { statut, donnees } = await appeler(corps(schemaAccepte));
       if (statut === 400 && schemaAccepte) {
         schemaAccepte = false;
-        ({ statut, donnees } = await appeler(sansSchema));
+        ({ statut, donnees } = await appeler(corps(false)));
       }
       if (statut < 200 || statut >= 300) {
         const err = typeof donnees.error === 'object' ? donnees.error : undefined;

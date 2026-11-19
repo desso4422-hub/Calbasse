@@ -43,6 +43,29 @@ Pour tout réafficher : `EXPO_PUBLIC_MVP=0` dans `.env.local` (voir `src/config.
 - **Aucune photo perdue** : si le réseau ne suit pas, ou si l'utilisateur ne veut pas attendre, la photo est gardée sur le téléphone et le repas apparaît dans Aujourd'hui (« En attente de réseau »). Il est analysé automatiquement dès que la connexion revient, puis passe à « Prêt à vérifier ». Ça marche aussi si l'app est fermée entre-temps.
 - **Jamais compté deux fois** : chaque photo porte une clé unique. Si elle est renvoyée (coupure pendant la réponse, file d'attente), le serveur rend le même résultat sans refaire l'analyse ni décompter un scan.
 
+## Application Android (APK) sans serveur
+
+Calbasse peut aussi tourner **sans serveur** : l'app interroge elle-même le modèle de vision
+(RodiumAI). C'est le mode de l'APK autonome, construit avec `EXPO_PUBLIC_VISION_DIRECTE=1`.
+
+- Les consignes, le catalogue d'aliments et la vérification de la réponse sont les mêmes que
+  côté serveur : tout vient de `src/lib/vision.ts`, partagé par l'app et `server/`.
+- **La clé n'est pas dans l'APK** : au premier scan, l'app demande la clé RodiumAI, la vérifie
+  (appel gratuit à `/v1/models`) et la range dans le coffre du téléphone (Keystore). L'APK peut
+  donc être partagé sans livrer la clé ; chacun met la sienne (Profil → Clé de reconnaissance).
+- Pas de compte ni de quota : le crédit RodiumAI fait la limite.
+- `EXPO_PUBLIC_RODIUMAI_API_KEY` permet quand même de poser une clé à la construction, pour un
+  APK strictement personnel. Elle est alors extractible de l'APK : à éviter pour une diffusion.
+
+Construction (nécessite le SDK Android) :
+
+```bash
+npx expo prebuild --platform android
+EXPO_PUBLIC_VISION_DIRECTE=1 ./android/gradlew -p android :app:assembleRelease
+```
+
+L'APK sort dans `android/app/build/outputs/apk/release/`.
+
 ## Installer Calbasse sur un téléphone (PWA)
 
 Calbasse s'utilise comme une **PWA** : une page web qui s'installe sur l'écran d'accueil comme une app (Android et iPhone), sans Play Store. Appareil photo, galerie et ouverture hors ligne fonctionnent.

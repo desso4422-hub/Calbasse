@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { ActivityIndicator, Image, Pressable, View } from 'react-native';
+import { modeReconnaissance } from '../services/reconnaissance';
 import { supprimerPhoto } from '../services/photosEnAttente';
 import { nouveauBrouillon, useBrouillon } from '../state/brouillon';
 import { nomsCreneaux, useStore, type ScanEnAttente as Scan } from '../state/store';
@@ -21,7 +22,7 @@ export function CarteScanEnAttente({ scan }: { scan: Scan }) {
         nom: r.nom,
         lignes: r.lignes,
         reconnu: r.reconnu,
-        mode: 'serveur',
+        mode: modeReconnaissance === 'demo' ? 'demo' : modeReconnaissance,
         photoUri: scan.photoUri ?? undefined,
         scanId: r.scanId,
         inconnus: r.inconnus,

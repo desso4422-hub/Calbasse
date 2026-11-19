@@ -4,7 +4,8 @@ import { test } from 'node:test';
 import { idsAliments, texteCatalogue } from './catalogue.ts';
 import type { GenerateContentResponse } from '@google/genai';
 import { optionsDepuisEnv } from './config.ts';
-import { analyserRepas, construireRequete, fournisseurGemini, texteDemande, normaliser, RefusModele, schemaJson, type ClientVision, type ReponseModele } from './reconnaissance.ts';
+import { z } from 'zod';
+import { analyserRepas, construireRequete, fournisseurGemini, texteDemande, normaliser, RefusModele, schemaJson, SchemaReponse, type ClientVision, type ReponseModele } from './reconnaissance.ts';
 
 const options = { modele: 'gemini-3.8-flash' };
 
@@ -124,4 +125,9 @@ test('numéros de téléphone', async () => {
   assert.equal(normaliserNumero('123', '229'), null);
   const { masquerNumero } = await import('./base.ts');
   assert.equal(masquerNumero('+221771234567'), '+22177•••4567');
+});
+
+test('le schéma JSON partagé avec l’app reste identique au schéma Zod du serveur', () => {
+  const { $schema: _, ...attendu } = z.toJSONSchema(SchemaReponse);
+  assert.deepEqual(JSON.parse(JSON.stringify(schemaJson)), attendu);
 });

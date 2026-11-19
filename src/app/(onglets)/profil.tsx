@@ -72,6 +72,14 @@ export default function Profil() {
             onPress={() => router.push('/premium')}
           />
         ) : null}
+        {modeReconnaissance === 'direct' ? (
+          <Ligne
+            icone="appareil"
+            titre="Clé de reconnaissance"
+            texte="Nécessaire pour analyser tes photos, à coller une seule fois"
+            onPress={() => router.push('/cle')}
+          />
+        ) : null}
         {serveurConfigure && fonctions.telephone ? (
           <Ligne
             icone="telephone"
@@ -108,7 +116,7 @@ export default function Profil() {
           remplace pas un avis médical.
         </T>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          <Etiquette texte={modeReconnaissance === 'demo' ? 'Reconnaissance : démo' : 'Reconnaissance : serveur'} ton="encre" petite />
+          <Etiquette texte={modeReconnaissance === 'demo' ? 'Reconnaissance : démo' : modeReconnaissance === 'direct' ? 'Reconnaissance : intégrée' : 'Reconnaissance : serveur'} ton="encre" petite />
           {etat.signalements.length > 0 ? <Etiquette texte={`${etat.signalements.length} signalement(s) envoyés`} ton="feuille" petite /> : null}
         </View>
       </View>

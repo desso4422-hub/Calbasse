@@ -1,14 +1,19 @@
 /**
  * Reconnaissance d'un repas à partir d'une photo (et d'un indice texte facultatif).
  *
+ * Trois modes, dans cet ordre :
  * - Serveur : si EXPO_PUBLIC_API_URL est défini, la photo (réduite à 1568 px) est envoyée à
  *   POST {API}/scan. Le serveur (dossier server/) vérifie le quota du compte, interroge le modèle
  *   de vision et ne répond qu'avec des aliments de la base. La clé du modèle reste sur le serveur.
- * - Démo : sans serveur, on s'appuie sur l'indice texte, sinon on propose un plat d'exemple.
+ * - Direct : si l'app embarque une clé (EXPO_PUBLIC_RODIUMAI_API_KEY), elle interroge le modèle
+ *   elle-même, sans serveur ni compte. C'est le mode de l'APK autonome (voir visionDirecte.ts).
+ * - Démo : sans l'un ni l'autre, on s'appuie sur l'indice texte, sinon on propose un plat d'exemple.
  */
 import { alimentExiste, trouverAliment } from '../lib/aliments.ts';
 import { reconnaitreDepuisTexte } from '../lib/reconnaissanceTexte.ts';
 import { appelApi, ErreurApi, serveurConfigure, type EtatCompteServeur } from './api';
+import { analyserPhoto, ErreurVision, visionDirecte } from './visionDirecte';
+import type { ResultatScan } from '../lib/vision.ts';
 import { nommerRepas, type Confiance, type LigneRepas } from '../lib/plats.ts';
 
 export { reconnaitreDepuisTexte };
@@ -18,7 +23,7 @@ export type ResultatReconnaissance = {
   lignes: LigneRepas[];
   /** false si on n'a rien pu reconnaître : l'utilisateur doit vérifier */
   reconnu: boolean;
-  mode: 'serveur' | 'demo';
+  mode: 'serveur' | 'direct' | 'demo';
   /** Identifiant du scan côté serveur, pour remonter les corrections */
   scanId?: string;
   /** La photo ne montre pas de nourriture */
@@ -35,6 +40,9 @@ export class ErreurReconnaissance extends Error {}
 /** Problème passager (réseau coupé ou lent, serveur occupé) : on pourra réessayer plus tard. */
 export class ErreurReseau extends ErreurReconnaissance {}
 
+/** Il manque la clé de reconnaissance (mode sans serveur) : l'utilisateur doit la coller. */
+export class ErreurCleVision extends ErreurReconnaissance {}
+
 /** Plus de scans aujourd'hui (le serveur fait foi) */
 export class ErreurQuota extends ErreurReconnaissance {
   readonly compte?: EtatCompteServeur;
@@ -44,10 +52,14 @@ export class ErreurQuota extends ErreurReconnaissance {
   }
 }
 
-export const modeReconnaissance: 'serveur' | 'demo' = serveurConfigure ? 'serveur' : 'demo';
+export const modeReconnaissance: 'serveur' | 'direct' | 'demo' = serveurConfigure ? 'serveur' : visionDirecte ? 'direct' : 'demo';
+
+/** true quand une vraie analyse de photo est possible (serveur ou modèle embarqué). */
+export const reconnaissanceActive = modeReconnaissance !== 'demo';
 
 export async function reconnaitreRepas(params: { photoBase64?: string; indice?: string; cle?: string }): Promise<ResultatReconnaissance> {
   if (serveurConfigure && params.photoBase64) return reconnaitreSurServeur(params.photoBase64, params.indice ?? '', params.cle);
+  if (visionDirecte && params.photoBase64) return reconnaitreSurAppareil(params.photoBase64, params.indice ?? '', params.cle);
   await new Promise((r) => setTimeout(r, 900));
   return reconnaitreDepuisTexte(params.indice ?? '');
 }
@@ -81,15 +93,32 @@ async function reconnaitreSurServeur(image: string, indice: string, cle?: string
     throw new ErreurReconnaissance(e instanceof ErreurApi ? e.message : 'Analyse impossible. Réessaie.');
   }
 
-  // On ne garde que des aliments que l'app connaît (le serveur peut être plus récent que l'app).
-  const lignes: LigneRepas[] = (donnees.lignes ?? [])
-    .filter((l) => alimentExiste(l.alimentId) && l.grammes > 0)
-    .map((l) => ({ alimentId: l.alimentId, grammes: l.grammes, confiance: l.confiance, alternatives: (l.alternatives ?? []).filter(alimentExiste) }));
-  const base = { mode: 'serveur' as const, scanId: donnees.scanId, inconnus: donnees.inconnus ?? [], remarque: donnees.remarque ?? '', compte: donnees.compte };
+  // Le serveur peut être plus récent que l'app : versResultat écarte ce qu'elle ne connaît pas.
+  return { ...versResultat({ ...donnees, lignes: donnees.lignes ?? [], nom: donnees.nom ?? '', estUnRepas: donnees.estUnRepas !== false, inconnus: donnees.inconnus ?? [], remarque: donnees.remarque ?? '' }, 'serveur', donnees.scanId), compte: donnees.compte };
+}
 
-  if (donnees.estUnRepas === false) return { ...base, nom: 'Pas de repas reconnu', lignes: [], reconnu: false, pasUnRepas: true };
-  if (lignes.length === 0) return { ...base, nom: donnees.nom || 'Plat à préciser', lignes: [], reconnu: false };
-  return { ...base, nom: donnees.nom || nommerRepas(lignes.map((l) => trouverAliment(l.alimentId).nom)), lignes, reconnu: true };
+/** Analyse faite par l'app elle-même : pas de compte, pas de quota, pas de serveur. */
+async function reconnaitreSurAppareil(image: string, indice: string, cle?: string): Promise<ResultatReconnaissance> {
+  let scan: ResultatScan;
+  try {
+    scan = await analyserPhoto({ image, indice, cle });
+  } catch (e) {
+    if (e instanceof ErreurVision && e.passager) throw new ErreurReseau(e.message);
+    if (e instanceof ErreurVision && e.cleManquante) throw new ErreurCleVision(e.message);
+    throw new ErreurReconnaissance(e instanceof Error ? e.message : 'Analyse impossible. Réessaie.');
+  }
+  return versResultat(scan, 'direct');
+}
+
+/** Même mise en forme pour les deux modes : on ne garde que des aliments que l'app connaît. */
+function versResultat(scan: Pick<ResultatScan, 'estUnRepas' | 'nom' | 'lignes' | 'inconnus' | 'remarque'>, mode: 'serveur' | 'direct', scanId?: string): ResultatReconnaissance {
+  const lignes: LigneRepas[] = (scan.lignes ?? [])
+    .filter((l) => alimentExiste(l.alimentId) && l.grammes > 0)
+    .map((l) => ({ alimentId: l.alimentId, grammes: l.grammes, confiance: l.confiance as Confiance, alternatives: (l.alternatives ?? []).filter(alimentExiste) }));
+  const base = { mode, scanId, inconnus: scan.inconnus ?? [], remarque: scan.remarque ?? '' };
+  if (scan.estUnRepas === false) return { ...base, nom: 'Pas de repas reconnu', lignes: [], reconnu: false, pasUnRepas: true };
+  if (lignes.length === 0) return { ...base, nom: scan.nom || 'Plat à préciser', lignes: [], reconnu: false };
+  return { ...base, nom: scan.nom || nommerRepas(lignes.map((l) => trouverAliment(l.alimentId).nom)), lignes, reconnu: true };
 }
 
 /** Remonte au serveur ce que l'utilisateur a corrigé : c'est ce qui permet d'améliorer la reconnaissance. */

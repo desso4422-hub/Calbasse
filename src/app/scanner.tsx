@@ -11,7 +11,7 @@ import { BoutonRond } from '../components/ui';
 import { fonctions } from '../config';
 import { preparerPhoto } from '../services/photo';
 import { garderPhoto } from '../services/photosEnAttente';
-import { ErreurQuota, ErreurReconnaissance, ErreurReseau, modeReconnaissance, reconnaitreRepas } from '../services/reconnaissance';
+import { ErreurCleVision, ErreurQuota, ErreurReconnaissance, ErreurReseau, reconnaissanceActive, reconnaitreRepas } from '../services/reconnaissance';
 import { nouveauBrouillon, useBrouillon } from '../state/brouillon';
 import { cleJour, heure } from '../lib/nutrition.ts';
 import { creneauPourHeure, estPremium, nouvelId, scansRestants, useStore } from '../state/store';
@@ -34,6 +34,7 @@ export default function Scanner() {
   const premium = estPremium(etat);
 
   const [erreur, setErreur] = useState<string | null>(null);
+  const [cleManquante, setCleManquante] = useState(false);
 
   // Plus de scans aujourd'hui : Premium si le paiement est activé, sinon un message clair
   const quotaAtteint = () => {
@@ -81,7 +82,7 @@ export default function Scanner() {
     misDeCote.current = false;
     const minuteries = [setTimeout(() => setEtape('analyse'), 4000), setTimeout(() => setEtape('lent'), 15000)];
     try {
-      const preparee = modeReconnaissance === 'serveur' ? await preparerPhoto(photo) : { uri: photo.uri, base64: undefined };
+      const preparee = reconnaissanceActive ? await preparerPhoto(photo) : { uri: photo.uri, base64: undefined };
       const cle = nouvelId();
       if (preparee.base64) courant.current = { cle, base64: preparee.base64, indice };
 
@@ -130,6 +131,7 @@ export default function Scanner() {
         quotaAtteint();
         return;
       }
+      setCleManquante(e instanceof ErreurCleVision);
       setErreur(e instanceof ErreurReconnaissance ? e.message : 'Analyse impossible. Réessaie, ou choisis ton plat dans la liste.');
     } finally {
       minuteries.forEach(clearTimeout);
@@ -220,7 +222,7 @@ export default function Scanner() {
                         ? 'Connexion coupée, nouvel essai…'
                         : 'Le réseau est lent, on continue…'}
                 </T>
-                {(etape === 'lent' || etape === 'nouvel-essai') && modeReconnaissance === 'serveur' ? (
+                {(etape === 'lent' || etape === 'nouvel-essai') && reconnaissanceActive ? (
                   <>
                     <Pressable
                       onPress={mettreDeCote}
@@ -276,9 +278,22 @@ export default function Scanner() {
         {erreur ? (
           <View accessibilityLiveRegion="polite" style={{ marginHorizontal: 25, marginTop: 14, flexDirection: 'row', gap: 10, backgroundColor: couleurs.nuit2, borderRadius: 14, padding: 12, alignItems: 'flex-start' }}>
             <Icone nom="info" taille={18} couleur={couleurs.peche} />
-            <T g={600} taille={13} couleur={couleurs.sable} interligne={1.4} style={{ flex: 1 }}>
-              {erreur}
-            </T>
+            <View style={{ flex: 1, gap: 8 }}>
+              <T g={600} taille={13} couleur={couleurs.sable} interligne={1.4}>
+                {erreur}
+              </T>
+              {cleManquante ? (
+                <Pressable
+                  onPress={() => router.push('/cle')}
+                  accessibilityRole="button"
+                  style={{ alignSelf: 'flex-start', backgroundColor: couleurs.sable, borderRadius: 12, paddingVertical: 9, paddingHorizontal: 14 }}
+                >
+                  <T g={700} taille={13} couleur={couleurs.encre}>
+                    Ajouter ma clé
+                  </T>
+                </Pressable>
+              ) : null}
+            </View>
           </View>
         ) : null}
 

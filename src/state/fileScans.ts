@@ -1,15 +1,14 @@
 /**
  * Analyse des scans en attente (photo prise sans réseau, ou réseau trop lent).
  * Relance : au lancement, quand le réseau revient, au retour au premier plan, et chaque minute
- * tant qu'il reste des scans en attente. Chaque photo est renvoyée avec sa clé : le serveur
- * ne l'analyse et ne la décompte qu'une fois, même si un envoi précédent avait abouti.
+ * tant qu'il reste des scans en attente. Chaque photo est renvoyée avec sa clé : elle n'est
+ * analysée (et décomptée) qu'une fois, même si un envoi précédent avait abouti.
  */
 import { addNetworkStateListener } from 'expo-network';
 import { useCallback, useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
-import { serveurConfigure } from '../services/api';
 import { lirePhoto } from '../services/photosEnAttente';
-import { ErreurQuota, ErreurReconnaissance, ErreurReseau, reconnaitreRepas } from '../services/reconnaissance';
+import { ErreurQuota, ErreurReconnaissance, ErreurReseau, reconnaissanceActive, reconnaitreRepas } from '../services/reconnaissance';
 import { useStore, type ScanEnAttente } from './store';
 
 export function useFileScans() {
@@ -21,7 +20,7 @@ export function useFileScans() {
   const enCours = useRef(false);
 
   const traiter = useCallback(async () => {
-    if (!serveurConfigure || enCours.current) return;
+    if (!reconnaissanceActive || enCours.current) return;
     enCours.current = true;
     // L'état lu par la boucle peut avoir un temps de retard sur les dispatch : on note ce qui est déjà traité
     const traites = new Set<string>();
@@ -90,7 +89,7 @@ export function useFileScans() {
 
   // Au lancement, au retour du réseau et au retour au premier plan
   useEffect(() => {
-    if (!pret || !serveurConfigure) return;
+    if (!pret || !reconnaissanceActive) return;
     traiter();
     const reseau = addNetworkStateListener((e) => {
       if (e.isConnected && e.isInternetReachable !== false) traiter();

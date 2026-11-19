@@ -51,6 +51,7 @@ function Navigation() {
         <Stack.Screen name="choisir" options={{ presentation: 'modal' }} />
         <Stack.Screen name="premium" options={{ presentation: 'modal' }} />
         <Stack.Screen name="telephone" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="cle" options={{ presentation: 'modal' }} />
         <Stack.Screen name="coach/index" />
         <Stack.Screen name="coach/[id]" />
       </Stack>

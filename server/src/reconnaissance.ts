@@ -11,7 +11,12 @@
  */
 import { ApiError, FinishReason, ThinkingLevel, type GenerateContentParameters, type GenerateContentResponse } from '@google/genai';
 import { z } from 'zod';
-import { idsAliments, texteCatalogue } from './catalogue.ts';
+import { idsAliments } from './catalogue.ts';
+import { CONSIGNES, lireJson, normaliser, schemaJson, texteDemande, texteSysteme, validerReponse, type ReponseModele, type ResultatScan, type TypeImage } from '../../src/lib/vision.ts';
+
+export { CONSIGNES, normaliser, schemaJson, texteDemande, texteSysteme };
+export type { LigneReconnue, ReponseModele, ResultatScan, TypeImage } from '../../src/lib/vision.ts';
+
 
 const Confiance = z.enum(['haute', 'moyenne', 'basse']);
 
@@ -31,24 +36,6 @@ export const SchemaReponse = z.object({
   remarque: z.string().describe("Courte remarque utile à l'utilisateur, en français, ou chaîne vide"),
 });
 
-export type ReponseModele = z.infer<typeof SchemaReponse>;
-
-export const CONSIGNES = `Tu es le moteur de reconnaissance de Calbasse, une application de suivi nutritionnel pour l'Afrique de l'Ouest et du Centre. Tu connais très bien les plats du Bénin, du Togo, de Côte d'Ivoire, du Sénégal, du Ghana, du Nigeria, du Cameroun, du Burkina Faso, du Mali et des pays voisins.
-
-À partir de la photo d'un repas (et d'un indice facultatif écrit par l'utilisateur), identifie chaque composant visible et estime son poids.
-
-Règles :
-1. Chaque composant distinct (féculent, sauce, viande ou poisson, accompagnement, boisson) devient une ligne. Choisis l'identifiant de la base qui correspond le mieux, en t'aidant des descriptions « Aspect », qui signalent les confusions fréquentes (attiéké / couscous / gari, akassa / pâte blanche / ablo, igname pilée / foufou / placali, sauce graine / sauce tomate / sauce arachide, riz au gras / riz thiéboudienne…).
-2. Dans une sauce, distingue viande et poisson : la viande a des fibres, du gras, des os ou de la peau épaisse ; le poisson a des arêtes, une peau fine écaillée et une chair qui s'effeuille. Un poulet ou une viande cuits dans une sauce s'écrivent en deux lignes : la viande, puis la sauce.
-3. Si un composant n'existe pas dans la base, utilise « inconnu » et décris-le. N'invente jamais d'identifiant.
-4. L'indice de l'utilisateur est une information forte : il sait ce qu'il mange. Suis-le quand la photo ne le contredit pas nettement. S'il nomme un plat local, utilise ce nom.
-5. Grammes : estime ce qui est réellement dans l'assiette, pas la mesure habituelle. Repères : une assiette plate standard fait 24 à 26 cm, une louche de sauce pèse environ 80 g, une boule de pâte 150 à 250 g, une cuisse de poulet environ 140 g. Sers-toi des couverts, des mains, des bols et de l'emballage visibles pour l'échelle.
-6. Plat familial ou plateau partagé : estime la portion d'un adulte et dis-le dans la remarque.
-7. Ne compte pas l'huile de cuisson à part : elle est déjà dans les valeurs de la base (l'utilisateur l'ajuste ensuite).
-8. Confiance : « haute » si tu es sûr, « moyenne » si un aliment proche est possible, « basse » si tu devines (photo floue, sauce qui cache tout). Donne alors 1 à 3 alternatives plausibles. Mieux vaut une confiance honnête qu'une fausse certitude : l'utilisateur corrige en un geste.
-9. Si la photo ne montre pas de nourriture, réponds estUnRepas = false et aucune ligne.
-10. Le nom du plat : le nom courant (« Garba », « Thiéboudienne », « Riz au gras, poulet frit », « Pâte rouge, poisson frit »).
-11. La remarque est courte et en français ; laisse-la vide si tu n'as rien d'utile à dire.`;
 
 export type NiveauReflexion = 'minimal' | 'low' | 'medium' | 'high';
 
@@ -56,22 +43,6 @@ export type OptionsAnalyse = {
   modele: string;
   /** Niveau de réflexion du modèle. Absent : la valeur par défaut du modèle. */
   reflexion?: NiveauReflexion;
-};
-
-export type LigneReconnue = {
-  alimentId: string;
-  grammes: number;
-  confiance: 'haute' | 'moyenne' | 'basse';
-  alternatives: string[];
-};
-
-export type ResultatScan = {
-  estUnRepas: boolean;
-  nom: string;
-  confiance: 'haute' | 'moyenne' | 'basse';
-  lignes: LigneReconnue[];
-  inconnus: { description: string; grammes: number }[];
-  remarque: string;
 };
 
 export class RefusModele extends Error {}
@@ -102,9 +73,6 @@ export type Fournisseur = {
   }>;
 };
 
-/** Les types d'image acceptés. */
-export type TypeImage = 'image/jpeg' | 'image/png' | 'image/webp' | 'image/gif';
-
 /** Seule partie du client dont on a besoin : facilite les tests avec un faux client. */
 export type ClientVision = { models: { generateContent: (p: GenerateContentParameters) => Promise<GenerateContentResponse> } };
 
@@ -114,12 +82,6 @@ const niveaux: Record<NiveauReflexion, ThinkingLevel> = {
   medium: ThinkingLevel.MEDIUM,
   high: ThinkingLevel.HIGH,
 };
-
-/** Schéma JSON envoyé à Gemini (calculé une fois : identique à chaque requête). */
-export const schemaJson = (() => {
-  const { $schema: _, ...schema } = z.toJSONSchema(SchemaReponse);
-  return schema;
-})();
 
 /** Requête Gemini. `texte` : la demande de l'utilisateur (voir texteDemande). */
 export function construireRequete(image: string, typeImage: TypeImage, texte: string, options: OptionsAnalyse): GenerateContentParameters {
@@ -144,17 +106,6 @@ export function construireRequete(image: string, typeImage: TypeImage, texte: st
       ...(options.reflexion ? { thinkingConfig: { thinkingLevel: niveaux[options.reflexion] } } : {}),
     },
   };
-}
-
-/** Texte de l'utilisateur envoyé avec la photo */
-export function texteDemande(indice: string): string {
-  const texteIndice = indice.trim() ? `Indice de l'utilisateur : « ${indice.trim().slice(0, 300)} »` : "Pas d'indice de l'utilisateur.";
-  return `${texteIndice}\nIdentifie les composants de ce repas.`;
-}
-
-/** Consignes + catalogue : identiques à chaque requête (cache de prompt chez le fournisseur). */
-export function texteSysteme(): string {
-  return `${CONSIGNES}\n\n${texteCatalogue()}`;
 }
 
 /** Gemini en direct (SDK Google). */
@@ -186,43 +137,12 @@ export async function analyserRepas(
   const r = await fournisseur.generer({ systeme: texteSysteme(), image, typeImage, texte: texteDemande(indice), options });
   if (r.refus) throw new RefusModele('Le modèle a décliné cette image');
   if (!r.texte) throw new ReponseIllisible(`Réponse vide (fin : ${r.fin})`);
-  let json: unknown;
-  try {
-    // Certains modèles entourent le JSON de ```json … ``` : on l'extrait
-    json = JSON.parse(r.texte.replace(/^\s*```(?:json)?\s*/i, '').replace(/\s*```\s*$/, ''));
-  } catch {
-    throw new ReponseIllisible(`Réponse non exploitable (fin : ${r.fin})`);
-  }
+  // Certains modèles entourent le JSON de ```json … ``` : lireJson l'extrait
+  const json = lireJson(r.texte);
+  if (json === undefined) throw new ReponseIllisible(`Réponse non exploitable (fin : ${r.fin})`);
   // Le modèle suit le schéma, mais on revalide : un identifiant hors base ne doit jamais passer.
   const brut = SchemaReponse.safeParse(json);
   if (!brut.success) throw new ReponseIllisible('Réponse non conforme au schéma');
-  return { resultat: normaliser(brut.data), brut: brut.data, usage: r.usage };
-}
-
-/** Nettoie la réponse : grammes plausibles, alternatives sans doublon, fusion des lignes répétées. */
-export function normaliser(r: ReponseModele): ResultatScan {
-  const lignes: LigneReconnue[] = [];
-  const inconnus: ResultatScan['inconnus'] = [];
-  for (const c of r.composants) {
-    const grammes = Math.min(2000, Math.max(5, Math.round(c.grammes / 5) * 5));
-    if (c.alimentId === 'inconnu') {
-      inconnus.push({ description: c.description || 'Aliment non reconnu', grammes });
-      continue;
-    }
-    const alternatives = [...new Set(c.alternatives)].filter((a) => a !== c.alimentId).slice(0, 3);
-    const existante = lignes.find((l) => l.alimentId === c.alimentId);
-    if (existante) {
-      existante.grammes += grammes;
-      continue;
-    }
-    lignes.push({ alimentId: c.alimentId, grammes, confiance: c.confiance, alternatives });
-  }
-  return {
-    estUnRepas: r.estUnRepas && (lignes.length > 0 || inconnus.length > 0),
-    nom: r.nomDuPlat.trim(),
-    confiance: r.confianceGlobale,
-    lignes,
-    inconnus,
-    remarque: r.remarque.trim(),
-  };
+  const verifie = validerReponse(brut.data) as ReponseModele;
+  return { resultat: normaliser(verifie), brut: verifie, usage: r.usage };
 }

@@ -22,7 +22,7 @@ export type Brouillon = {
   creneau: Creneau;
   photoUri?: string;
   reconnu: boolean;
-  mode: 'serveur' | 'demo' | 'manuel';
+  mode: 'serveur' | 'direct' | 'demo' | 'manuel';
   /** Scan côté serveur : sert à remonter les corrections */
   scanId?: string;
   /** Ce que la reconnaissance avait proposé (pour comparer avec ce que l'utilisateur garde) */
