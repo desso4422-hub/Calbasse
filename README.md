@@ -61,10 +61,13 @@ Construction (nécessite le SDK Android) :
 
 ```bash
 npx expo prebuild --platform android
-EXPO_PUBLIC_VISION_DIRECTE=1 ./android/gradlew -p android :app:assembleRelease
+EXPO_PUBLIC_VISION_DIRECTE=1 ./android/gradlew -p android :app:assembleRelease \
+  -PreactNativeArchitectures=armeabi-v7a,arm64-v8a
 ```
 
-L'APK sort dans `android/app/build/outputs/apk/release/`.
+L'APK sort dans `android/app/build/outputs/apk/release/` (≈ 57 Mo ; sans l'option
+`reactNativeArchitectures`, il embarque aussi les versions d'émulateur et pèse le double).
+Il faut un JDK 17 et, pour le code natif, le NDK attendu par la version d'AGP.
 
 ## Installer Calbasse sur un téléphone (PWA)
 
