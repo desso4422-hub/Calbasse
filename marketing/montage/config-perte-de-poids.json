@@ -1,57 +1,173 @@
 {
-  "sortie": "calbasse-perte-de-poids-v2.mp4",
+  "sortie": "calbasse-perte-de-poids-v3.mp4",
   "police_dossier": "police",
   "temp": "/tmp/claude-0/-home-user-Calbasse/f8ce0a80-532c-5a90-811b-6edf5f24d622/scratchpad/montage_tmp",
+  "cadence_syllabes_par_s": 6.1,
+  "vitesse_min": 0.95,
+  "vitesse_max": 1.35,
+  "vitesse_pause": 3.0,
   "cible_morceau_lufs": -21.0,
+  "crf": 20,
+  "sons": true,
+  "badge": {
+    "clip": 1,
+    "mot": "app"
+  },
   "clips": [
     {
+      "ugc": 1,
       "fichier": "rushs/ugc1-partie1.mp4",
       "debut": 0.0,
-      "fin": 7.47,
-      "texte": "Tu veux maigrir mais tu manges africain tous les jours, toi ? Moi, c'était ça mon problème. On te dit de compter les calories, mais dans ces applications-là, il n'y a pas l'attiéké."
+      "fin": 3.78,
+      "texte": "Tu veux maigrir mais tu manges africain tous les jours, toi ? Moi, c'était ça mon problème.",
+      "animations": [
+        {
+          "type": "pastille",
+          "mot": "africain",
+          "texte": "Manger africain",
+          "icone": "check",
+          "style": "terre",
+          "duree": 1.8
+        }
+      ]
     },
     {
+      "ugc": 1,
       "fichier": "rushs/ugc1-partie2.mp4",
       "debut": 0.0,
       "fin": 7.93,
-      "texte": "J'ai trouvé une app qui connaît nos plats. Tu photographies ton assiette et elle te dit tout."
+      "texte": "J'ai trouvé une app qui connaît nos plats. Tu photographies ton assiette et elle te dit tout.",
+      "animations": [
+        {
+          "type": "carte_scan",
+          "mot": "photographies",
+          "plat": "Attiéké, poisson braisé",
+          "kcal": 615,
+          "prot": 35,
+          "gluc": 84,
+          "lip": 14,
+          "fin": "clip"
+        }
+      ]
     },
     {
+      "ugc": 2,
       "fichier": "rushs/ugc2-partie1.mp4",
       "debut": 0.0,
       "fin": 7.93,
-      "texte": "Franchement, moi je pensais que c'est le riz qui me gonflait. Je mangeais ma pâte rouge le soir sans savoir ce que ça pèse."
+      "texte": "Franchement, moi je pensais que c'est le riz qui me gonflait. Je mangeais ma pâte rouge le soir sans savoir ce que ça pèse.",
+      "animations": [
+        {
+          "type": "pastille",
+          "mot": "riz",
+          "texte": "Le riz ?",
+          "icone": "?",
+          "style": "terre",
+          "duree": 1.8
+        },
+        {
+          "type": "pastille",
+          "mot": "rouge",
+          "texte": "Pâte rouge, le soir",
+          "icone": "!",
+          "style": "nuit",
+          "duree": 2.0
+        }
+      ]
     },
     {
+      "ugc": 2,
       "fichier": "rushs/ugc2-partie2.mp4",
       "debut": 0.1,
       "fin": 7.93,
-      "texte": "Une amie m'a montré Calbasse, je prends juste la photo. Là, j'ai vu que le vrai problème, c'est l'huile et les sucreries. Aujourd'hui, mon pantalon ferme."
+      "texte": "Une amie m'a montré Calbasse, je prends juste la photo. Là, j'ai vu que le vrai problème, c'est l'huile et les sucreries. Aujourd'hui, mon pantalon ferme.",
+      "animations": [
+        {
+          "type": "pastille",
+          "mot": "l'huile",
+          "mot_fin": "aujourd'hui",
+          "texte": "L'huile et les sucreries",
+          "icone": "!",
+          "style": "alerte",
+          "cy": 1540
+        },
+        {
+          "type": "pastille",
+          "mot": "aujourd'hui",
+          "texte": "Le pantalon ferme",
+          "icone": "check",
+          "style": "ok",
+          "fin": "clip",
+          "cy": 1540
+        }
+      ]
     },
     {
-      "fichier": "rushs/ugc3-partie1-propre.mp4",
+      "ugc": 3,
+      "fichier": "rushs/ugc3-partie1.mp4",
       "debut": 0.22,
       "fin": 7.93,
-      "texte": "Moi, j'ai essayé les régimes où tu dois laisser le riz. Trois jours et j'abandonne, je suis sénégalaise quand même."
+      "zoom_force": {
+        "de": 4.45,
+        "a": 5.95,
+        "niveau": 1.34
+      },
+      "texte": "Moi, j'ai essayé les régimes où tu dois laisser le riz. Trois jours et j'abandonne, je suis sénégalaise quand même.",
+      "animations": [
+        {
+          "type": "pastille",
+          "mot": "régimes",
+          "texte": "Régimes sans riz",
+          "icone": "!",
+          "style": "alerte",
+          "duree": 2.2
+        },
+        {
+          "type": "pastille",
+          "mot": "j'abandonne",
+          "texte": "Abandon !",
+          "icone": "!",
+          "style": "alerte",
+          "duree": 1.4
+        }
+      ]
     },
     {
+      "ugc": 3,
       "fichier": "rushs/ugc3-partie2.mp4",
       "debut": 0.0,
       "fin": 7.93,
-      "texte": "Avec Calbasse, je photographie mon thiéboudienne et je vois la portion. Je mange ce que j'aime, je réduis juste un peu. Six semaines après, mes habits me vont mieux."
+      "texte": "Avec Calbasse, je photographie mon thiéboudienne et je vois la portion. Je mange ce que j'aime, je réduis juste un peu. Six semaines après, mes habits me vont mieux.",
+      "animations": [
+        {
+          "type": "viseur_portion",
+          "mot": "photographie",
+          "mot_portion": "portion",
+          "mot_bascule": "réduis",
+          "mot_fin": "semaines"
+        }
+      ]
     },
     {
+      "ugc": 4,
       "fichier": "rushs/ugc4-partie1.mp4",
       "debut": 0.0,
       "fin": 7.93,
-      "texte": "Si tu es fatigué de vouloir maigrir sans jamais savoir ce que tu manges, écris-nous sur WhatsApp. Le bouton est juste en bas."
+      "texte": "Si tu es fatigué de vouloir maigrir sans jamais savoir ce que tu manges, écris-nous sur WhatsApp. Le bouton est juste en bas.",
+      "animations": [
+        {
+          "type": "whatsapp",
+          "mot": "WhatsApp",
+          "fin": "video"
+        }
+      ]
     },
     {
+      "ugc": 4,
       "fichier": "rushs/ugc4-partie2.mp4",
       "debut": 0.0,
       "fin": 7.93,
       "texte": "On t'installe Calbasse, et dès ce soir tu photographies ton ndolé. Tu vas enfin voir ce qu'il y a vraiment dans ton assiette."
     }
-  ],
-  "crf": 21
+  ]
 }

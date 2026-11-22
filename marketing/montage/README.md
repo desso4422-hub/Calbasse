@@ -1,41 +1,65 @@
 # Montage des publicités
 
 Transforme les 8 rushs sortis de Flow (4 UGC × 2 parties) en une vidéo finie : 9:16, 1080×1920,
-sous-titres, volume homogène. Résultat : `calbasse-perte-de-poids-v2.mp4` (non versionné : trop lourd)
-et `calbasse-perte-de-poids-v2.srt` (sous-titres, importables dans CapCut pour les retoucher).
+sous-titres, zooms, motion design, volume homogène.
 
-## Refaire le montage après avoir remplacé un rush
+Sorties (non versionnées, trop lourdes) : `calbasse-perte-de-poids-v3.mp4`.
+Versionné : `calbasse-perte-de-poids-v3.srt`, les sous-titres importables dans CapCut.
 
-1. Mets le nouveau fichier dans `rushs/` sous le même nom (`ugc1-partie1.mp4`, …).
-2. Si les mots dits ont changé, corrige le champ `texte` du clip dans `config-perte-de-poids.json`.
+## Refaire le montage
+
+1. Remplace un rush : mets le nouveau fichier dans `rushs/` sous le même nom (`ugc1-partie1.mp4`, …).
+2. Si les mots dits ont changé, corrige le `texte` du clip dans `config-perte-de-poids.json`.
 3. Lance :
 
 ```bash
 python3 assembler.py config-perte-de-poids.json
 ```
 
-Il faut `ffmpeg`, et les paquets Python `numpy`, `Pillow` et `opencv-python-headless`.
+Pour essayer vite un passage, ajoute `--extrait 20,32` (seules ces secondes sont dessinées).
+Il faut `ffmpeg` et les paquets Python `numpy`, `Pillow` et `opencv-python-headless`.
 
-## Ce que fait `assembler.py`
+## Les modules
 
-- **Coupe** chaque rush au début et à la fin de la voix (`debut`, `fin` dans la config).
-- **Sous-titres** : les mots affichés sont ceux réellement dits, pas ceux du script prévu. Chaque
-  mot reçoit sa part du temps de parole en proportion de ses syllabes, recalée sur la pause la plus
-  proche. Groupes de 3-4 mots, mot prononcé en jaune, police Plus Jakarta Sans de la marque.
-- **Volume** : chaque morceau est ramené au même niveau, puis l'ensemble est normalisé à −16 LUFS.
-- **Export** H.264 + AAC, image à 24 par seconde.
+| Fichier | Rôle |
+| --- | --- |
+| `assembler.py` | Chef d'orchestre : lit la config, calcule les temps, écrit les sous-titres, lance le son et l'image |
+| `parole.py` | La voix : pauses, cadence en syllabes par seconde, minutage de chaque mot, carte de temps |
+| `rendu.py` | L'image : relecture à la bonne vitesse, zooms, transitions |
+| `animations.py` | Motion design : barre de progression, badge, pastilles, carte de scan, viseur, bouton WhatsApp |
+| `son.py` | La piste sonore : étirement, volume, « whoosh » aux changements d'avatar |
 
-## Ce que fait `masquer_par_zoom.py`
+## Comment la vitesse est uniformisée
 
-L'IA incruste parfois de faux sous-titres illisibles en bas de l'image. Un flou laisse une tache
-et une retouche laisse des lettres fantômes sur un tissu à motifs ; le script fait plutôt un zoom
-d'insistance (1,3×, en douceur) pendant le passage concerné, ce qui sort le bas du cadre.
+Chaque clip est découpé en tranches de voix et de pauses. On mesure sa **cadence** (syllabes par seconde
+de voix, pauses exclues) et on calcule la vitesse qui le ramène à la cadence cible
+(`cadence_syllabes_par_s`, 6,1 par défaut), dans une fourchette de 0,95× à 1,35×. Les pauses sont
+accélérées 3 fois. Résultat : tous les clips parlent au même rythme, et la vidéo est plus courte.
 
-```bash
-python3 masquer_par_zoom.py rushs/ugc3-partie1.mp4 rushs/ugc3-partie1-propre.mp4 4.45 5.95 1.3
+La même carte de temps sert à la voix, à l'image et aux sous-titres, donc tout reste synchrone.
+
+## Les animations, dans la config
+
+Chaque clip peut avoir une liste `animations`, déclenchées par un mot du texte :
+
+```json
+{"type": "pastille", "mot": "riz", "texte": "Le riz ?", "icone": "?", "style": "terre", "duree": 1.8}
+{"type": "carte_scan", "mot": "photographies", "plat": "Attiéké, poisson braisé", "kcal": 615, "prot": 35, "gluc": 84, "lip": 14, "fin": "clip"}
+{"type": "viseur_portion", "mot": "photographie", "mot_portion": "portion", "mot_bascule": "réduis", "mot_fin": "semaines"}
+{"type": "whatsapp", "mot": "WhatsApp", "fin": "video"}
 ```
+
+- `mot` : début de l'animation ; `mot_fin`, `duree` ou `fin` (`clip` ou `video`) : sa fin.
+- Une pastille reste affichée au moins 1,2 s, et rien ne déborde sur l'avatar suivant.
+- La carte de scan reprend l'écran de résultat de l'app. **Ses chiffres sont ceux de la base de
+  l'app, qui sont encore des valeurs d'illustration** : à remplacer par des valeurs validées.
+- `badge` (au niveau de la config) fait apparaître le logo Calbasse à partir d'un mot.
+- `zoom_force` (dans un clip) impose un zoom pendant un passage : c'est ce qui cache les faux
+  sous-titres que l'IA incruste parfois en bas de l'image.
 
 ## Vérifier les rushs avant de monter
 
-Regarder la fin de chaque clip : la voix court souvent jusqu'à la dernière image, et un mot
-peut être coupé net. Dans ce cas, `fin` dans la config coupe juste avant le mot tronqué.
+- La voix court souvent jusqu'à la dernière image : un mot peut être coupé net. Dans ce cas, `fin` coupe
+  juste avant le mot tronqué (ou avant la phrase si le mot est mal prononcé).
+- Chercher les faux sous-titres en bas de l'image.
+- Écouter le nom de la marque, qui n'est pas toujours bien prononcé.

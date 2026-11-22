@@ -1,101 +1,45 @@
 #!/usr/bin/env python3
 """
-Assemble une créative UGC à partir des rushs générés dans Flow (VEO) : 4 UGC × 2 parties.
+Assemble une créative UGC à partir des rushs de Flow (VEO) : 4 UGC × 2 parties.
 
-  python3 assembler.py config.json
+  python3 assembler.py config.json                    # vidéo complète
+  python3 assembler.py config.json --extrait 22,32    # seulement ces secondes (pour essayer vite)
 
-Ce que fait le script, dans l'ordre :
-  1. coupe chaque rush au début et à la fin de la voix (bornes lues dans la config) ;
-  2. (en amont) masque_par_zoom.py cache les faux sous-titres que l'IA incruste parfois dans l'image ;
-  3. cale les sous-titres sur la voix : chaque mot reçoit sa part du temps de parole, en
-     proportion de ses syllabes, puis est recalé sur la pause la plus proche ;
-  4. égalise le volume de chaque morceau, puis normalise l'ensemble (-16 LUFS, norme des réseaux) ;
-  5. exporte en 1080×1920 (9:16), H.264 + AAC, plus le fichier .srt pour retoucher dans CapCut.
+Ce que fait le montage :
+  - coupe chaque rush là où la voix commence et finit ;
+  - uniformise la vitesse de parole : tous les clips sont ramenés à la même cadence (syllabes par
+    seconde de voix) et les pauses sont accélérées, donc la vidéo est plus courte et régulière ;
+  - zooms rythmés à chaque phrase, transitions entre avatars, barre de progression ;
+  - motion design lié à ce qui est dit (carte de scan, pastilles, viseur, bouton WhatsApp) ;
+  - sous-titres calés sur la voix, volume égalisé (-16 LUFS), petits « whoosh » aux changements d'avatar ;
+  - export 1080×1920 (9:16), plus le .srt pour retoucher dans CapCut.
 
-Le script ne devine pas ce qui est dit : les textes affichés viennent de la config, écrits
-d'après la transcription réelle du son (et non d'après le script prévu, car l'IA s'écarte parfois
-d'un mot ou deux).
+Le script ne devine pas ce qui est dit : les textes viennent de la config, écrits d'après la
+transcription réelle du son (l'IA s'écarte parfois d'un mot ou deux du script prévu).
 """
-import json, math, re, subprocess, sys, wave
+import json
+import re
+import subprocess
+import sys
 from pathlib import Path
 
-import numpy as np
 from PIL import ImageFont
 
+import animations as A
+import parole as P
+import rendu
+import son
+
 W, H = 1080, 1920
-FPS = 24
+FPS = P.FPS
 COULEUR_TEXTE = "&H00FFFFFF"       # blanc (ASS : BGR)
 COULEUR_MOT = "&H0078C8FF"         # mot prononcé : jaune chaud
 COULEUR_CONTOUR = "&H00101828"     # brun très foncé de la marque
 POLICE = "Plus Jakarta Sans ExtraBold"
 TAILLE = 100                       # taille ASS : hauteur de ligne en pixels d'une vidéo 1080×1920
-Y_SOUS_TITRES = 1250               # ~65 % de la hauteur : sous le visage, au-dessus de l'interface des réseaux
-LARGEUR_MAX = 900                  # une ligne de sous-titres ne dépasse jamais cette largeur (marges de 90 px)
+Y_SOUS_TITRES = 1250               # ~65 % de la hauteur : sous le visage, au-dessus du bas de l'écran
+LARGEUR_MAX = 900                  # une ligne de sous-titres ne dépasse jamais cette largeur
 MAX_MOTS = 4
-
-
-def sh(cmd, **kw):
-    return subprocess.run(cmd, check=True, capture_output=True, text=True, **kw)
-
-
-def duree_media(f):
-    return float(sh(["ffprobe", "-v", "error", "-show_entries", "format=duration", "-of", "csv=p=0", str(f)]).stdout)
-
-
-def audio_mono(src, dest):
-    sh(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-ac", "1", "-ar", "16000", str(dest)])
-    with wave.open(str(dest)) as w:
-        sr = w.getframerate()
-        x = np.frombuffer(w.readframes(w.getnframes()), dtype=np.int16).astype(np.float32) / 32768
-    return sr, x
-
-
-def loudness(f):
-    out = sh(["ffmpeg", "-v", "info", "-i", str(f), "-af", "ebur128", "-f", "null", "-"]).stderr
-    return float(re.findall(r"I:\s+(-?[\d.]+) LUFS", out)[-1])
-
-
-# ——— Syllabes et minutage des mots ———
-
-VOYELLES = "aeiouyàâäéèêëîïôöùûüœ"
-
-
-def syllabes(mot):
-    m = re.sub(r"[^a-zàâäéèêëîïôöùûüœç']", "", mot.lower())
-    n = len(re.findall(f"[{VOYELLES}]+", m))
-    if n > 1 and re.search(rf"[^{VOYELLES}'](e|es|ent)$", m):
-        n -= 1
-    return max(1, n)
-
-
-def minutage_mots(mots, x, sr, debut, fin):
-    """Temps de début de chaque mot (et fin du dernier) dans [debut, fin], d'après l'énergie de la voix."""
-    hop = 0.01
-    n = int(sr * 0.03)
-    pas = int(sr * hop)
-    rms = np.array([math.sqrt(float(np.mean(x[i:i + n] ** 2)) + 1e-12) for i in range(0, len(x) - n, pas)])
-    db = 20 * np.log10(rms + 1e-9)
-    seuil = max(np.percentile(db, 95) - 28, -55)
-    voix = (db > seuil).astype(float)
-    i0, i1 = int(debut / hop), int(fin / hop)
-    voix_seg = voix[i0:i1]
-    cumul = np.concatenate([[0], np.cumsum(voix_seg)]) * hop
-    total = cumul[-1] or (fin - debut)
-    poids = [syllabes(m) for m in mots]
-    s = sum(poids)
-    bornes_frac = np.cumsum([0] + poids) / s
-    t = [debut + float(np.interp(f * total, cumul, np.arange(len(cumul)) * hop)) for f in bornes_frac]
-    # Recaler chaque frontière sur le creux d'énergie le plus proche (±120 ms)
-    lisse = np.convolve(db, np.ones(5) / 5, mode="same")
-    for k in range(1, len(t) - 1):
-        a, b = int((t[k] - 0.12) / hop), int((t[k] + 0.12) / hop)
-        a, b = max(a, i0 + 1), min(b, i1 - 1)
-        if b > a:
-            t[k] = (a + int(np.argmin(lisse[a:b]))) * hop
-    t[0], t[-1] = debut, fin
-    for k in range(1, len(t)):                      # ordre croissant, pas de mot de moins de 80 ms
-        t[k] = max(t[k], t[k - 1] + 0.08)
-    return t
 
 
 # ——— Groupes de sous-titres ———
@@ -126,7 +70,6 @@ def groupes(mots, police_ttf):
             res.append(cur)
             cur = []
     if cur:
-        # un mot seul à la fin : on le rattache au groupe précédent s'il y a la place
         if res and len(cur) == 1 and len(res[-1]) < MAX_MOTS and largeur(" ".join(res[-1] + cur), police_ttf) <= LARGEUR_MAX:
             res[-1] += cur
         else:
@@ -148,48 +91,116 @@ def echapper(m):
     return m.replace("{", "(").replace("}", ")").replace("\\", "")
 
 
-def main(cfg_path):
+# ——— Animations liées aux mots ———
+
+def temps_du_mot(mot, mots, t_mots, decalage):
+    """Début (sur toute la vidéo) du premier mot qui correspond, sans tenir compte de la ponctuation."""
+    cible = P.normaliser_mot(mot)
+    for m, t in zip(mots, t_mots):
+        if P.normaliser_mot(m) == cible:
+            return decalage + t
+    raise SystemExit(f"Mot « {mot} » introuvable dans : {' '.join(mots)}")
+
+
+def construire_calque(a, mots, t_mots, decalage, fin_clip, fin_video):
+    t0 = temps_du_mot(a["mot"], mots, t_mots, decalage)
+    if "mot_fin" in a:
+        t1 = temps_du_mot(a["mot_fin"], mots, t_mots, decalage)
+    elif "duree" in a:
+        t1 = t0 + a["duree"]
+    else:
+        t1 = fin_video + 1.0 if a.get("fin") == "video" else fin_clip   # jusqu'à la dernière image, sans fondu final
+    typ = a["type"]
+    if typ == "pastille":
+        t1 = max(t1, t0 + 1.2)           # une pastille reste lisible au moins 1,2 s, même si la phrase file vite
+    if a.get("fin") != "video":
+        t1 = min(t1, fin_clip - 0.06)    # jamais d'élément qui déborde sur l'avatar suivant
+    if typ == "pastille":
+        return A.Pastille(t0, t1, a["texte"], cy=a.get("cy", 1480), style=a.get("style", "terre"), icone=a.get("icone", "?"), cx=a.get("cx", W / 2))
+    if typ == "carte_scan":
+        return A.CarteScan(t0, t1, a["plat"], a["kcal"], a["prot"], a["gluc"], a["lip"], cy=a.get("cy", 1560))
+    if typ == "viseur_portion":
+        return A.ViseurPortion(t0, t1, temps_du_mot(a["mot_portion"], mots, t_mots, decalage), temps_du_mot(a["mot_bascule"], mots, t_mots, decalage), cy=a.get("cy", 1560))
+    if typ == "whatsapp":
+        return A.BoutonWhatsApp(t0, t1, cy=a.get("cy", 1520))
+    raise SystemExit(f"Type d'animation inconnu : {typ}")
+
+
+def main(cfg_path, extrait=None):
     cfg = json.loads(Path(cfg_path).read_text())
     base = Path(cfg_path).parent
     sortie = (base / cfg["sortie"]).resolve()
     tmp = Path(cfg.get("temp", "/tmp/montage_ugc")); tmp.mkdir(parents=True, exist_ok=True)
+    police_dossier = Path(cfg["police_dossier"]).resolve() if Path(cfg["police_dossier"]).is_absolute() else (base / cfg["police_dossier"]).resolve()
+    police_ttf = str(police_dossier / "PlusJakartaSans_800ExtraBold.ttf")
 
-    police_ttf = str(next(Path(cfg["police_dossier"]).resolve().glob("*.ttf")))
-    clips = cfg["clips"]
-    infos = []
-    t_global = 0.0
-    evenements, lignes_srt = [], []
-    for c in clips:
+    cible = cfg.get("cadence_syllabes_par_s", 6.1)
+    vmin, vmax = cfg.get("vitesse_min", 0.95), cfg.get("vitesse_max", 1.35)
+    v_pause = cfg.get("vitesse_pause", 3.0)
+    cible_lufs = cfg.get("cible_morceau_lufs", -21.0)
+
+    # ——— 1. Chaque clip : voix, vitesse, carte de temps, minutage des mots ———
+    infos, decalage = [], 0.0
+    for i, c in enumerate(cfg["clips"]):
         src = (base / c["fichier"]).resolve()
-        dur = duree_media(src)
-        sr, x = audio_mono(src, tmp / (src.stem + ".wav"))
-        # Coupes alignées sur les images (24 par seconde) : le son et l'image restent synchrones
-        q = lambda s: round(s * FPS) / FPS
-        debut, fin = q(c.get("debut", 0.0)), q(min(c.get("fin", dur), dur))
-        mots = c["texte"].split(" ")   # espace ordinaire seulement : « toi ? » garde son espace insécable
-        t_mots = minutage_mots(mots, x, sr, debut, fin)
-        lufs = loudness(src)
-        infos.append(dict(c, src=str(src), debut=debut, fin=fin, lufs=lufs))
+        sr, x = P.audio_mono(src, tmp / (src.stem + ".wav"))
+        debut, fin = c.get("debut", 0.0), min(c.get("fin", P.duree_media(src)), P.duree_media(src))
+        tranches, voix = P.analyser_voix(x, sr, debut, fin)
+        mots = c["texte"].split(" ")      # espace ordinaire seulement : « toi ? » garde son espace insécable
+        cadence = sum(P.syllabes(m) for m in mots) / voix
+        vitesse = min(vmax, max(vmin, cible / cadence))
+        carte, n = P.carte_temps(tranches, vitesse, v_pause)
+        t_src = P.minutage_mots(mots, x, sr, debut, fin)
+        t_mots = [P.src_vers_sortie(t, carte) for t in t_src]
+        infos.append(dict(cfg=c, src=str(src), debut=debut, fin=fin, carte=carte, n=n, mots=mots, t_mots=t_mots, vitesse=vitesse, cadence=cadence,
+                          decalage=decalage, lufs=P.loudness(src), ugc=c.get("ugc", i // 2 + 1)))
+        decalage += n / FPS
+    duree_totale = decalage
 
+    # ——— 2. Coupures de zoom (une par phrase) et transitions ———
+    for i, c in enumerate(infos):
+        dure = c["n"] / FPS
+        coupures, derniere = [], 0.0
+        gs = groupes(c["mots"], police_ttf)
         idx = 0
-        for g in groupes(mots, police_ttf):
-            tg = t_mots[idx: idx + len(g) + 1]
+        for gi, g in enumerate(gs):
+            fin_g = c["t_mots"][idx + len(g)] if idx + len(g) < len(c["t_mots"]) else dure
+            idx += len(g)
+            fin_phrase = bool(re.search(r"[.?!…]$", g[-1]))
+            virgule = bool(re.search(r"[,;:]$", g[-1]))
+            suivant = c["t_mots"][idx] if idx < len(c["t_mots"]) else dure
+            if (fin_phrase and fin_g - derniere >= 1.3 or virgule and fin_g - derniere >= 1.9) and dure - suivant >= 0.9 and gi < len(gs) - 1:
+                coupures.append(suivant)
+                derniere = suivant
+        c["coupures"] = coupures
+        c["depart_zoom"] = i
+        c["coupe_avant"] = i > 0 and c["ugc"] != infos[i - 1]["ugc"]
+        c["coupe_apres"] = i < len(infos) - 1 and c["ugc"] != infos[i + 1]["ugc"]
+        f = c["cfg"].get("zoom_force")      # secondes du rush → secondes de la sortie
+        c["force"] = None if not f else dict(de=P.src_vers_sortie(f["de"], c["carte"]), a=P.src_vers_sortie(f["a"], c["carte"]), niveau=f["niveau"])
+
+    # ——— 3. Sous-titres (ASS pour la vidéo, SRT pour CapCut) ———
+    evenements, lignes_srt = [], []
+    for c in infos:
+        idx = 0
+        for g in groupes(c["mots"], police_ttf):
+            tg = c["t_mots"][idx: idx + len(g) + 1]
+            fin_g = c["decalage"] + (tg[len(g)] if len(tg) > len(g) else c["n"] / FPS)
             for k, mot in enumerate(g):
-                a = t_global + (tg[k] - debut)
-                b = t_global + (tg[k + 1] - debut) if k + 1 < len(tg) else t_global + (fin - debut)
-                if k == len(g) - 1:                       # le groupe reste affiché jusqu'au suivant
+                a = c["decalage"] + tg[k]
+                b = c["decalage"] + tg[k + 1] if k + 1 < len(tg) else c["decalage"] + c["n"] / FPS
+                if k == len(g) - 1:
                     b = max(b, a + 0.12)
                 texte = " ".join(
-                    (f"{{\\c{COULEUR_MOT}}}{echapper(w)}{{\\c{COULEUR_TEXTE}}}" if j == k else echapper(w)) for j, w in enumerate(g)
+                    (f"{{\\c{COULEUR_MOT}\\fscx124\\fscy124\\t(0,110,\\fscx108\\fscy108)}}{echapper(w)}{{\\c{COULEUR_TEXTE}\\fscx100\\fscy100}}" if j == k else echapper(w))
+                    for j, w in enumerate(g)
                 )
-                evenements.append(f"Dialogue: 0,{t_ass(a)},{t_ass(b)},Legende,,0,0,0,,{{\\an5\\pos({W // 2},{Y_SOUS_TITRES})}}{texte}")
-            a_g = t_global + (tg[0] - debut)
-            b_g = t_global + ((tg[len(g)] if len(tg) > len(g) else fin) - debut)
-            lignes_srt.append((a_g, b_g, " ".join(g)))
+                fondu = "\\fad(70,0)" if k == 0 else ""
+                evenements.append(f"Dialogue: 0,{t_ass(a)},{t_ass(b)},Legende,,0,0,0,,{{\\an5\\pos({W // 2},{Y_SOUS_TITRES}){fondu}}}{texte}")
+            lignes_srt.append((c["decalage"] + tg[0], fin_g, " ".join(g)))
             idx += len(g)
-        t_global += fin - debut
-
-    ass = f"""[Script Info]
+    f_ass = tmp / "sous-titres.ass"
+    f_ass.write_text(f"""[Script Info]
 ScriptType: v4.00+
 PlayResX: {W}
 PlayResY: {H}
@@ -201,43 +212,67 @@ Style: Legende,{POLICE},{TAILLE},{COULEUR_TEXTE},{COULEUR_TEXTE},{COULEUR_CONTOU
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
-""" + "\n".join(evenements) + "\n"
-    f_ass = tmp / "sous-titres.ass"
-    f_ass.write_text(ass, encoding="utf-8")
-    srt = "\n".join(f"{i}\n{t_srt(a)} --> {t_srt(b)}\n{t}\n" for i, (a, b, t) in enumerate(lignes_srt, 1))
+""" + "\n".join(evenements) + "\n", encoding="utf-8")
     f_srt = sortie.with_suffix(".srt")
-    f_srt.write_text(srt, encoding="utf-8")
+    f_srt.write_text("\n".join(f"{i}\n{t_srt(a)} --> {t_srt(b)}\n{t}\n" for i, (a, b, t) in enumerate(lignes_srt, 1)), encoding="utf-8")
 
-    # Volume : chaque morceau ramené à la même cible, puis normalisation de l'ensemble
-    cible = cfg.get("cible_morceau_lufs", -21.0)
-    entrees, filtres, concat = [], [], ""
-    for i, c in enumerate(infos):
-        entrees += ["-i", c["src"]]
-        v = f"[{i}:v]"
-        filtres.append(
-            f"{v}trim=start={c['debut']}:end={c['fin']},setpts=PTS-STARTPTS,fps={FPS},"
-            f"scale={W}:{H}:flags=lanczos,setsar=1,format=yuv420p[v{i}]"
-        )
-        gain = cible - c["lufs"]
-        filtres.append(
-            f"[{i}:a]atrim=start={c['debut']}:end={c['fin']},asetpts=PTS-STARTPTS,volume={gain:.2f}dB,"
-            f"afade=t=in:d=0.012,afade=t=out:st={c['fin'] - c['debut'] - 0.012:.3f}:d=0.012[a{i}]"
-        )
-        concat += f"[v{i}][a{i}]"
-    filtres.append(f"{concat}concat=n={len(infos)}:v=1:a=1[vc][ac]")
-    filtres.append(f"[vc]ass='{f_ass}':fontsdir='{Path(cfg['police_dossier']).resolve()}'[vf]")
-    filtres.append("[ac]loudnorm=I=-16:TP=-1.5:LRA=9[af]")
-    fg = ";".join(filtres)
-    (tmp / "graphe.txt").write_text(fg)
-    cmd = ["ffmpeg", "-v", "error", "-y", *entrees, "-filter_complex_script", str(tmp / "graphe.txt"),
-           "-map", "[vf]", "-map", "[af]", "-c:v", "libx264", "-preset", "medium", "-crf", str(cfg.get("crf", 20)), "-pix_fmt", "yuv420p",
-           "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(sortie)]
-    sh(cmd)
-    print(f"OK : {sortie}  ({t_global:.1f} s)")
+    # ——— 4. Motion design ———
+    calques = []
+    segments_ugc = []
+    for c in infos:
+        d0, d1 = c["decalage"], c["decalage"] + c["n"] / FPS
+        if segments_ugc and segments_ugc[-1][2] == c["ugc"]:
+            segments_ugc[-1][1] = d1
+        else:
+            segments_ugc.append([d0, d1, c["ugc"]])
+        for a in c["cfg"].get("animations", []):
+            calques.append(construire_calque(a, c["mots"], c["t_mots"], c["decalage"], d1, duree_totale))
+    b = cfg.get("badge")
+    if b:
+        c = infos[b["clip"]]
+        calques.append(A.Badge(temps_du_mot(b["mot"], c["mots"], c["t_mots"], c["decalage"]), duree_totale))
+    calques.insert(0, A.BarreProgression([(a, z) for a, z, _ in segments_ugc], duree_totale))
+
+    # ——— 5. Son ———
+    voix = tmp / "voix.wav"
+    son.construire_voix([dict(src=c["src"], carte=c["carte"], gain_db=cible_lufs - c["lufs"]) for c in infos], voix, duree_totale)
+    effets = []
+    if cfg.get("sons", True):
+        souffle = son.whoosh()
+        effets = [(c["decalage"] - 0.22, souffle) for c in infos if c["coupe_avant"]]
+    mix = tmp / "mix.wav"
+    son.mixer(voix, effets, mix)
+
+    # ——— 6. Image : rendu, puis encodage avec sous-titres et normalisation du volume ———
+    cmd = ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}", "-r", str(FPS), "-i", "-", "-i", str(mix)]
+    if extrait:
+        cmd += ["-ss", f"{extrait[0]:.3f}", "-t", f"{extrait[1] - extrait[0]:.3f}"]
+    cmd += ["-vf", f"ass='{f_ass}':fontsdir='{police_dossier}'", "-af", "loudnorm=I=-16:TP=-1.5:LRA=9",
+            "-c:v", "libx264", "-preset", "medium", "-crf", str(cfg.get("crf", 20)), "-pix_fmt", "yuv420p",
+            "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", str(sortie)]
+    ff = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+    total = sum(c["n"] for c in infos)
+    for k, img in enumerate(rendu.rendre(infos, calques, extrait)):
+        if extrait and k / FPS > extrait[1] + 0.3:
+            break                                    # le reste n'est pas demandé
+        ff.stdin.write(img.tobytes())
+        if k % 120 == 0:
+            print(f"  image {k}/{total}", flush=True)
+    ff.stdin.close()
+    if ff.wait() != 0:
+        raise SystemExit("L'encodage a échoué")
+
+    print(f"OK : {sortie}  ({duree_totale:.1f} s)")
     print(f"     {f_srt}")
-    for i, c in enumerate(infos):
-        print(f"  {i + 1}. {Path(c['src']).name[:30]:30s} {c['debut']:.2f}→{c['fin']:.2f} s  {c['lufs']:.1f} LUFS  {c['texte'][:50]}…")
+    print(f"  {'clip':26s} {'source':>6s} {'sortie':>6s} {'vitesse':>7s} {'cadence':>8s}  texte")
+    for c in infos:
+        print(f"  {Path(c['src']).name[:26]:26s} {c['fin'] - c['debut']:6.2f} {c['n'] / FPS:6.2f} {c['vitesse']:6.2f}× {c['cadence'] * c['vitesse']:6.2f}/s  {c['cfg']['texte'][:48]}…")
 
 
 if __name__ == "__main__":
-    main(sys.argv[1])
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    ext = None
+    if "--extrait" in sys.argv:
+        ext = tuple(float(v) for v in sys.argv[sys.argv.index("--extrait") + 1].split(","))
+        args = [a for a in args if a != sys.argv[sys.argv.index("--extrait") + 1]]
+    main(args[0], ext)

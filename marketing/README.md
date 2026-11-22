@@ -76,10 +76,16 @@ Huit rushs reçus, trois enseignements :
    génération : « Tu veux maigrir mais tu manges africain tous les jours ? Moi c'était ça mon
    problème. Aucune appli ne connaît l'attiéké poisson. » (21 mots)
 2. **L'IA incruste parfois de faux sous-titres** en bas de l'image. À chercher dans chaque rush ;
-   `montage/masquer_par_zoom.py` les cache.
+   `zoom_force` dans la config du montage les cache par un zoom.
 3. **Le nom Calbasse n'est pas toujours bien prononcé.** À écouter dans chaque rush. S'il est mal
    dit, régénérer la partie en écrivant « Calbasse » comme il doit se prononcer (par exemple
    « Cal-basse »).
+4. **Les mots africains sont souvent mal dits** (« attiéké » devenait un faux mot). Les écrire comme
+   ils se prononcent : « atchéké » pour l'attiéké (prononciation ivoirienne), « ndolé » sans le N
+   initial est déjà ce que l'IA dit.
+5. **La vitesse de parole varie beaucoup d'un clip à l'autre** (de 2,9 à 6,2 syllabes par seconde sur
+   un même avatar, à cause des pauses). Le montage la ramène à un rythme unique, mais plus les
+   rushs sont proches, moins il faut étirer.
 
 Le montage est automatisé : voir `montage/README.md`.
 
