@@ -47,7 +47,7 @@ Pour chaque UGC :
 Prolonger, plutôt que générer une deuxième vidéo à part : c'est ce qui garde la même voix
 et le même visage d'un bout à l'autre.
 
-**3. L'assemblage (CapCut)**
+**3. L'assemblage (CapCut, ou `montage/assembler.py` qui le fait automatiquement)**
 - Mets les 4 vidéos bout à bout, dans l'ordre 01 → 02 → 03 → 04.
 - Coupe les silences au début et à la fin de chaque morceau : l'enchaînement doit être sec.
 - Sous-titres automatiques, gros, au centre, 3 à 4 mots par ligne, mot en cours surligné.
@@ -65,6 +65,23 @@ Remplace `229XXXXXXXX` par ton numéro au format international, sans `+` ni espa
 Le message est déjà écrit dans la conversation : la personne n'a plus qu'à envoyer.
 
 ---
+
+## Retours de la première production (perte de poids)
+
+Huit rushs reçus, trois enseignements :
+
+1. **Maximum 24 mots par partie.** Une partie de 8 secondes se dit à environ 3 mots par seconde.
+   La partie 1 de l'UGC 01 en faisait 31 : l'IA a été coupée en plein « l'attiéké poisson ». Deux
+   autres parties à 27 et 29 mots tenaient de justesse. Version courte conseillée pour une nouvelle
+   génération : « Tu veux maigrir mais tu manges africain tous les jours ? Moi c'était ça mon
+   problème. Aucune appli ne connaît l'attiéké poisson. » (21 mots)
+2. **L'IA incruste parfois de faux sous-titres** en bas de l'image. À chercher dans chaque rush ;
+   `montage/masquer_par_zoom.py` les cache.
+3. **Le nom Calbasse n'est pas toujours bien prononcé.** À écouter dans chaque rush. S'il est mal
+   dit, régénérer la partie en écrivant « Calbasse » comme il doit se prononcer (par exemple
+   « Cal-basse »).
+
+Le montage est automatisé : voir `montage/README.md`.
 
 ## Les règles qui ne changent pas
 

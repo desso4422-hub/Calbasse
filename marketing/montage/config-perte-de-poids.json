@@ -1,0 +1,57 @@
+{
+  "sortie": "calbasse-perte-de-poids-v2.mp4",
+  "police_dossier": "police",
+  "temp": "/tmp/claude-0/-home-user-Calbasse/f8ce0a80-532c-5a90-811b-6edf5f24d622/scratchpad/montage_tmp",
+  "cible_morceau_lufs": -21.0,
+  "clips": [
+    {
+      "fichier": "rushs/ugc1-partie1.mp4",
+      "debut": 0.0,
+      "fin": 7.47,
+      "texte": "Tu veux maigrir mais tu manges africain tous les jours, toi ? Moi, c'était ça mon problème. On te dit de compter les calories, mais dans ces applications-là, il n'y a pas l'attiéké."
+    },
+    {
+      "fichier": "rushs/ugc1-partie2.mp4",
+      "debut": 0.0,
+      "fin": 7.93,
+      "texte": "J'ai trouvé une app qui connaît nos plats. Tu photographies ton assiette et elle te dit tout."
+    },
+    {
+      "fichier": "rushs/ugc2-partie1.mp4",
+      "debut": 0.0,
+      "fin": 7.93,
+      "texte": "Franchement, moi je pensais que c'est le riz qui me gonflait. Je mangeais ma pâte rouge le soir sans savoir ce que ça pèse."
+    },
+    {
+      "fichier": "rushs/ugc2-partie2.mp4",
+      "debut": 0.1,
+      "fin": 7.93,
+      "texte": "Une amie m'a montré Calbasse, je prends juste la photo. Là, j'ai vu que le vrai problème, c'est l'huile et les sucreries. Aujourd'hui, mon pantalon ferme."
+    },
+    {
+      "fichier": "rushs/ugc3-partie1-propre.mp4",
+      "debut": 0.22,
+      "fin": 7.93,
+      "texte": "Moi, j'ai essayé les régimes où tu dois laisser le riz. Trois jours et j'abandonne, je suis sénégalaise quand même."
+    },
+    {
+      "fichier": "rushs/ugc3-partie2.mp4",
+      "debut": 0.0,
+      "fin": 7.93,
+      "texte": "Avec Calbasse, je photographie mon thiéboudienne et je vois la portion. Je mange ce que j'aime, je réduis juste un peu. Six semaines après, mes habits me vont mieux."
+    },
+    {
+      "fichier": "rushs/ugc4-partie1.mp4",
+      "debut": 0.0,
+      "fin": 7.93,
+      "texte": "Si tu es fatigué de vouloir maigrir sans jamais savoir ce que tu manges, écris-nous sur WhatsApp. Le bouton est juste en bas."
+    },
+    {
+      "fichier": "rushs/ugc4-partie2.mp4",
+      "debut": 0.0,
+      "fin": 7.93,
+      "texte": "On t'installe Calbasse, et dès ce soir tu photographies ton ndolé. Tu vas enfin voir ce qu'il y a vraiment dans ton assiette."
+    }
+  ],
+  "crf": 21
+}

@@ -46,3 +46,8 @@ yarn-error.*
 # Netlify
 .netlify/
 netlify/fonctions/
+
+# Montage des publicités (rushs vidéo, sorties)
+marketing/montage/rushs/
+marketing/montage/*.mp4
+marketing/montage/__pycache__/
