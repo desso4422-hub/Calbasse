@@ -57,7 +57,7 @@ export default function CoachCorriger() {
             {repas.nom}
           </T>
           <T g={700} taille={13} couleur={couleurs.encre2}>
-            {formater(estime.kcal)} kcal · {estime.prot} g prot.
+            {formater(estime.kcal)} kcal · P {estime.prot} · G {estime.gluc} · L {estime.lip}
           </T>
         </View>
       </View>
@@ -104,7 +104,7 @@ export default function CoachCorriger() {
             </T>
           </T>
           <T g={700} taille={13} couleur={couleurs.peche}>
-            {corrige.prot} g de protéines
+            {corrige.kcal} kcal après correction
           </T>
         </View>
         <View style={{ backgroundColor: couleurs.sable, borderRadius: 999, paddingVertical: 7, paddingHorizontal: 12 }}>

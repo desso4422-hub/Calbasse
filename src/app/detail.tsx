@@ -2,6 +2,7 @@ import { Redirect, router } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Platform, Pressable, View } from 'react-native';
 import { Icone } from '../components/Icone';
+import { Macros, MacrosCourt } from '../components/Macros';
 import { T } from '../components/T';
 import { Bouton, BoutonRond, Ecran, Etiquette } from '../components/ui';
 import { trouverAliment } from '../lib/aliments.ts';
@@ -98,12 +99,12 @@ export default function Detail() {
                   </T>
                 ) : null}
               </T>
-              <T g={700} taille={13}>
-                {formater(n.kcal)} kcal ·{' '}
-                <T g={700} taille={13} couleur={couleurs.terreFoncee}>
-                  {n.prot} g prot.
+              <View style={{ alignItems: 'flex-end', gap: 1 }}>
+                <T g={700} taille={13}>
+                  {formater(n.kcal)} kcal
                 </T>
-              </T>
+                <MacrosCourt n={n} taille={11} />
+              </View>
               {lignes.length > 1 ? (
                 <Pressable onPress={() => setBrouillon(retirerAliment(b, i))} accessibilityRole="button" accessibilityLabel={`Retirer ${a.nom}`} hitSlop={10} style={{ alignSelf: 'center' }}>
                   <Icone nom="croix" taille={16} couleur={couleurs.encre2} epaisseur={2.4} />
@@ -148,16 +149,21 @@ export default function Detail() {
         </T>
       </View>
 
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: couleurs.encre, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 18 }}>
-        <T g={700} taille={14} couleur={couleurs.sable}>
-          Total du repas
-        </T>
-        <T g={800} taille={15} couleur={couleurs.sable}>
-          {formater(total.kcal)} kcal ·{' '}
-          <T g={800} taille={15} couleur={couleurs.peche}>
-            {total.prot} g prot.
+      <View style={{ backgroundColor: couleurs.encre, borderRadius: 18, paddingVertical: 14, paddingHorizontal: 18, gap: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' }}>
+          <T g={700} taille={14} couleur={couleurs.sable}>
+            Total du repas
           </T>
-        </T>
+          <T g={800} taille={22} couleur={couleurs.peche}>
+            {formater(total.kcal)}
+            <T g={700} taille={13} couleur={couleurs.peche}>
+              {' '}kcal
+            </T>
+          </T>
+        </View>
+        <View style={{ borderTopWidth: 1, borderTopColor: '#4A3322', paddingTop: 10 }}>
+          <Macros n={total} ton="sombre" />
+        </View>
       </View>
 
       <Pressable onPress={signaler} disabled={signale} accessibilityRole="button" style={{ flexDirection: 'row', gap: 10, backgroundColor: couleurs.sable, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 14, alignItems: 'flex-start' }}>

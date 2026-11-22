@@ -11,7 +11,7 @@ import { demarrerPaiement, ErreurPaiement, modePaiement, suivrePaiement, tarifs 
 import { estPremium, SCANS_GRATUITS, SCANS_PREMIUM, useStore } from '../state/store';
 import { couleurs } from '../theme';
 
-const avantages = [`${SCANS_PREMIUM} scans photo par jour`, 'Suivi détaillé de tes protéines', 'Bilan de la semaine chaque dimanche', 'Historique complet de tes repas'];
+const avantages = [`${SCANS_PREMIUM} scans photo par jour`, 'Suivi détaillé de tes calories et nutriments', 'Bilan de la semaine chaque dimanche', 'Historique complet de tes repas'];
 
 export default function Premium() {
   const { etat, dispatch } = useStore();

@@ -9,6 +9,7 @@ import { Icone, type NomIcone } from '../components/Icone';
 import { T } from '../components/T';
 import { BoutonRond } from '../components/ui';
 import { fonctions } from '../config';
+import { serveurConfigure } from '../services/api';
 import { preparerPhoto } from '../services/photo';
 import { garderPhoto } from '../services/photosEnAttente';
 import { ErreurCleVision, ErreurQuota, ErreurReconnaissance, ErreurReseau, reconnaissanceActive, reconnaitreRepas } from '../services/reconnaissance';
@@ -32,6 +33,8 @@ export default function Scanner() {
 
   const restants = scansRestants(etat);
   const premium = estPremium(etat);
+  // Sans serveur, il n'y a ni compte ni quota : seul le crédit du modèle limite les scans.
+  const quotaSuivi = serveurConfigure;
 
   const [erreur, setErreur] = useState<string | null>(null);
   const [cleManquante, setCleManquante] = useState(false);
@@ -72,7 +75,7 @@ export default function Scanner() {
   };
 
   const analyser = async (photo: { uri: string; width: number; height: number }) => {
-    if (restants <= 0) {
+    if (quotaSuivi && restants <= 0) {
       quotaAtteint();
       return;
     }
@@ -141,7 +144,7 @@ export default function Scanner() {
   };
 
   const photographier = async () => {
-    if (restants <= 0) return quotaAtteint();
+    if (quotaSuivi && restants <= 0) return quotaAtteint();
     if (!camera.current || !pret) return;
     try {
       const photo = await camera.current.takePictureAsync({ quality: 0.8 });
@@ -152,7 +155,7 @@ export default function Scanner() {
   };
 
   const galerie = async () => {
-    if (restants <= 0) return quotaAtteint();
+    if (quotaSuivi && restants <= 0) return quotaAtteint();
     const res = await ImagePicker.launchImageLibraryAsync({ mediaTypes: ['images'], quality: 0.9 });
     if (!res.canceled && res.assets[0]) await analyser(res.assets[0]);
   };
@@ -164,18 +167,22 @@ export default function Scanner() {
       <ScrollView contentContainerStyle={{ flexGrow: 1, paddingTop: insets.top + 14, paddingBottom: insets.bottom + 24 }} keyboardShouldPersistTaps="handled">
         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 20 }}>
           <BoutonRond icone="croix" label="Fermer le scanner" fond={couleurs.nuit2} couleur={couleurs.sable} onPress={() => router.back()} />
-          <Pressable
-            onPress={() => (fonctions.premium ? router.push('/premium') : undefined)}
-            disabled={!fonctions.premium}
-            style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: couleurs.nuit2, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 14 }}
-          >
-            <Icone nom="appareil" taille={16} couleur={couleurs.sable} />
-            <T g={700} taille={13} couleur={couleurs.sable}>
-              {premium || !fonctions.premium
-                ? `${restants} scan${restants > 1 ? 's' : ''} restant${restants > 1 ? 's' : ''} aujourd'hui`
-                : `${restants} scan${restants > 1 ? 's' : ''} gratuit${restants > 1 ? 's' : ''} aujourd'hui`}
-            </T>
-          </Pressable>
+          {quotaSuivi ? (
+            <Pressable
+              onPress={() => (fonctions.premium ? router.push('/premium') : undefined)}
+              disabled={!fonctions.premium}
+              style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: couleurs.nuit2, borderRadius: 999, paddingVertical: 9, paddingHorizontal: 14 }}
+            >
+              <Icone nom="appareil" taille={16} couleur={couleurs.sable} />
+              <T g={700} taille={13} couleur={couleurs.sable}>
+                {premium || !fonctions.premium
+                  ? `${restants} scan${restants > 1 ? 's' : ''} restant${restants > 1 ? 's' : ''} aujourd'hui`
+                  : `${restants} scan${restants > 1 ? 's' : ''} gratuit${restants > 1 ? 's' : ''} aujourd'hui`}
+              </T>
+            </Pressable>
+          ) : (
+            <View />
+          )}
           <BoutonRond
             icone="eclair"
             label={flash ? 'Éteindre le flash' : 'Activer le flash'}

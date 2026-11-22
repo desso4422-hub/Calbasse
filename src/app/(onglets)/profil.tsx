@@ -55,11 +55,13 @@ export default function Profil() {
             </T>
           </Pressable>
         </View>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Repere titre="Protéines" valeur={`${p.cibles.prot} g`} fort />
-          <Repere titre="Calories" valeur={formater(p.cibles.kcal)} />
-          <Repere titre="Glucides" valeur={`${p.cibles.gluc} g`} />
-          <Repere titre="Lipides" valeur={`${p.cibles.lip} g`} />
+        <View style={{ gap: 8 }}>
+          <Repere titre="Calories" valeur={`${formater(p.cibles.kcal)} kcal`} fort />
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            <Repere titre="Protéines" valeur={`${p.cibles.prot} g`} />
+            <Repere titre="Glucides" valeur={`${p.cibles.gluc} g`} />
+            <Repere titre="Lipides" valeur={`${p.cibles.lip} g`} />
+          </View>
         </View>
       </View>
 

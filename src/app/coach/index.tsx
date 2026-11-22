@@ -104,7 +104,7 @@ export default function CoachClients() {
                 {c.repas && t ? (
                   <View style={{ alignItems: 'flex-end', gap: 4 }}>
                     <T g={800} taille={12}>
-                      {formater(t.kcal)} kcal · {t.prot} g
+                      {formater(t.kcal)} kcal
                     </T>
                     {statut === 'aCorriger' ? <Etiquette texte="À corriger" ton="terre" petite /> : <Etiquette texte="Validé" ton="feuille" icone="coche" petite />}
                   </View>

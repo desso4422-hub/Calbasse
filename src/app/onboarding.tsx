@@ -3,6 +3,7 @@ import { useMemo, useState } from 'react';
 import { TextInput, View } from 'react-native';
 import { Logo } from '../components/Graphiques';
 import { Icone, type NomIcone } from '../components/Icone';
+import { Macros } from '../components/Macros';
 import { T } from '../components/T';
 import { Bouton, BoutonRond, Carte, Choix, Ecran, Segment } from '../components/ui';
 import { calculerCibles, formater, type Activite, type Mesures, type Objectif, type Sexe } from '../lib/nutrition.ts';
@@ -12,7 +13,7 @@ import { useStore } from '../state/store';
 import { couleurs, polices } from '../theme';
 
 const objectifs: { id: Objectif; titre: string; texte: string; icone: NomIcone }[] = [
-  { id: 'masse', titre: 'Prendre de la masse', texte: 'Savoir si tu atteins tes protéines, même avec le riz sauce de la dame.', icone: 'hausse' },
+  { id: 'masse', titre: 'Prendre de la masse', texte: 'Voir ce que pèse vraiment ton assiette, même avec le riz sauce de la dame.', icone: 'hausse' },
   { id: 'perte', titre: 'Perdre du poids', texte: 'Manger le plat de la famille, avec la bonne portion.', icone: 'baisse' },
   { id: 'forme', titre: 'Garder la forme', texte: 'Savoir si ton assiette est bonne pour toi, sans culpabiliser.', icone: 'coeur' },
 ];
@@ -100,7 +101,7 @@ export default function Onboarding() {
               Quel est ton objectif ?
             </T>
             <T taille={15} couleur={couleurs.encre2} interligne={1.5}>
-              On adapte tes protéines et tes calories à ton objectif. Tu pourras le changer quand tu veux.
+              On adapte tes calories et tes nutriments à ton objectif. Tu pourras le changer quand tu veux.
             </T>
           </View>
           <View style={{ gap: 12 }}>
@@ -185,34 +186,19 @@ export default function Onboarding() {
             </T>
           </View>
           <View style={{ backgroundColor: couleurs.encre, borderRadius: 22, padding: 18, gap: 14 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-end' }}>
-              <View style={{ gap: 2 }}>
-                <T g={700} taille={12} couleur={couleurs.sableClair}>
-                  Protéines
-                </T>
-                <T g={800} taille={42} couleur={couleurs.peche}>
-                  {cibles.prot}
-                  <T g={700} taille={18} couleur={couleurs.peche}>
-                    {' '}g
-                  </T>
-                </T>
-              </View>
-              <View style={{ gap: 2, alignItems: 'flex-end' }}>
-                <T g={700} taille={12} couleur={couleurs.sableClair}>
-                  Calories
-                </T>
-                <T g={800} taille={28} couleur={couleurs.sable}>
-                  {formater(cibles.kcal)}
-                  <T g={700} taille={14} couleur={couleurs.sable}>
-                    {' '}kcal
-                  </T>
-                </T>
-              </View>
-            </View>
-            <View style={{ borderTopWidth: 1, borderTopColor: '#4A3322', paddingTop: 10 }}>
-              <T g={500} taille={12} couleur={couleurs.sableClair}>
-                Glucides {cibles.gluc} g · Lipides {cibles.lip} g
+            <View style={{ gap: 2 }}>
+              <T g={700} taille={12} couleur={couleurs.sableClair}>
+                Calories
               </T>
+              <T g={800} taille={42} couleur={couleurs.peche}>
+                {formater(cibles.kcal)}
+                <T g={700} taille={18} couleur={couleurs.peche}>
+                  {' '}kcal
+                </T>
+              </T>
+            </View>
+            <View style={{ borderTopWidth: 1, borderTopColor: '#4A3322', paddingTop: 12 }}>
+              <Macros n={cibles} ton="sombre" />
             </View>
           </View>
           <Carte style={{ backgroundColor: couleurs.sable, borderWidth: 0, flexDirection: 'row', gap: 10 }}>

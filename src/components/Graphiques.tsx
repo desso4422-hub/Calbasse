@@ -4,7 +4,7 @@ import { trouverAliment } from '../lib/aliments.ts';
 import type { LigneRepas } from '../lib/plats.ts';
 import { couleurs } from '../theme';
 
-/** Anneau de progression (protéines). */
+/** Anneau de progression (calories du jour). */
 export function Anneau({ taille = 132, epaisseur = 14, progression, couleur = couleurs.terreCuite }: { taille?: number; epaisseur?: number; progression: number; couleur?: string }) {
   const r = (taille - epaisseur) / 2;
   const c = 2 * Math.PI * r;

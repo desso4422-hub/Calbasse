@@ -5,7 +5,7 @@ import { Icone } from '../../components/Icone';
 import { T } from '../../components/T';
 import { Bouton, Ecran, Etiquette } from '../../components/ui';
 import { fonctions } from '../../config';
-import { calculerBilan } from '../../lib/bilan.ts';
+import { calculerBilan, dansObjectif } from '../../lib/bilan.ts';
 import { additionner, ajouterJours, arrondirNutriments, formater, joursCourts, lundi, periode, totalRepas, zero } from '../../lib/nutrition.ts';
 import { estPremium, repasDuJour, useStore } from '../../state/store';
 import { couleurs } from '../../theme';
@@ -25,13 +25,13 @@ export default function Bilan() {
   const bilan = calculerBilan(debut, aujourdhui, cibles, (cle) => {
     const repas = repasDuJour(etat, cle);
     const t = arrondirNutriments(repas.map((r) => totalRepas(r.lignes, r.huile)).reduce(additionner, zero));
-    return { prot: t.prot, kcal: t.kcal, repas: repas.length };
+    return { ...t, repas: repas.length };
   });
 
   // Échelle : l'objectif à ~80 % de la hauteur, sauf si un jour dépasse
-  const max = Math.max(cibles.prot * 1.2, ...bilan.jours.map((j) => j.prot));
+  const max = Math.max(cibles.kcal * 1.2, ...bilan.jours.map((j) => j.kcal));
   const hauteurBarre = (v: number) => Math.max(4, Math.round((v / max) * (HAUTEUR - 22)));
-  const ligneObjectif = hauteurBarre(cibles.prot);
+  const ligneObjectif = hauteurBarre(cibles.kcal);
 
   // En gratuit, seul le bilan de la semaine en cours est ouvert
   const verrouille = fonctions.premium && !premium && decalage < 0;
@@ -72,39 +72,39 @@ export default function Bilan() {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10 }}>
               <View style={{ gap: 2 }}>
                 <T g={700} taille={12} couleur={couleurs.terreFoncee}>
-                  Protéines moyennes
+                  Calories moyennes
                 </T>
                 <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 5 }}>
                   <T g={800} taille={38}>
-                    {bilan.protMoyenne}
+                    {formater(bilan.moyennes.kcal)}
                   </T>
                   <T g={700} taille={14} couleur={couleurs.encre2}>
-                    g / jour
+                    kcal / jour
                   </T>
                 </View>
               </View>
-              <Etiquette texte={`${bilan.joursAtteints} jour${bilan.joursAtteints > 1 ? 's' : ''} sur ${bilan.jours.filter((j) => !j.futur).length} dans l'objectif`} ton="feuille" icone="coche" />
+              <Etiquette texte={`${bilan.joursAtteints} jour${bilan.joursAtteints > 1 ? 's' : ''} sur ${bilan.joursNotes.length} dans la cible`} ton="feuille" icone="coche" />
             </View>
 
-            <View accessible accessibilityLabel={`Protéines par jour : ${bilan.jours.filter((j) => !j.futur).map((j) => `${j.prot} grammes`).join(', ')}. Objectif ${cibles.prot} grammes.`}>
+            <View accessible accessibilityLabel={`Calories par jour : ${bilan.jours.filter((j) => !j.futur).map((j) => `${j.kcal}`).join(', ')}. Objectif ${cibles.kcal} kilocalories.`}>
               <View style={{ height: HAUTEUR, flexDirection: 'row', alignItems: 'flex-end', gap: 6 }}>
                 <View
                   pointerEvents="none"
                   style={{ position: 'absolute', left: 0, right: 0, bottom: ligneObjectif, borderTopWidth: 2, borderStyle: 'dashed', borderColor: couleurs.encre, opacity: 0.55 }}
                 />
                 {bilan.jours.map((j) => {
-                  const atteint = j.prot >= cibles.prot;
+                  const atteint = dansObjectif(j.kcal, cibles.kcal);
                   return (
                     <View key={j.cle} style={{ flex: 1, alignItems: 'center', justifyContent: 'flex-end', gap: 4 }}>
                       {!j.futur && j.repas > 0 ? (
                         <>
                           <T g={700} taille={11}>
-                            {j.prot}
+                            {formater(j.kcal)}
                           </T>
                           <View
                             style={{
                               width: 28,
-                              height: hauteurBarre(j.prot),
+                              height: hauteurBarre(j.kcal),
                               borderTopLeftRadius: 8,
                               borderTopRightRadius: 8,
                               borderBottomLeftRadius: 4,
@@ -135,26 +135,30 @@ export default function Bilan() {
               <Legende>
                 <View style={{ width: 18, borderTopWidth: 2, borderStyle: 'dashed', borderColor: couleurs.encre }} />
                 <T g={600} taille={12} couleur={couleurs.encre2}>
-                  Objectif {cibles.prot} g
+                  Objectif {formater(cibles.kcal)} kcal
                 </T>
               </Legende>
               <Legende>
                 <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: couleurs.terreCuite }} />
                 <T g={600} taille={12} couleur={couleurs.encre2}>
-                  Atteint
+                  Dans la cible
                 </T>
               </Legende>
               <Legende>
                 <View style={{ width: 12, height: 12, borderRadius: 3, backgroundColor: '#F6DCC8', borderWidth: 2, borderColor: couleurs.terreCuite }} />
                 <T g={600} taille={12} couleur={couleurs.encre2}>
-                  Pas encore
+                  Hors cible
                 </T>
               </Legende>
             </View>
           </View>
 
-          <View style={{ flexDirection: 'row', gap: 12 }}>
-            <Chiffre titre="Calories moyennes" valeur={formater(bilan.kcalMoyenne)} unite="kcal" />
+          <View style={{ gap: 12 }}>
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <Chiffre titre="Protéines" valeur={String(bilan.moyennes.prot)} unite="g / jour" />
+              <Chiffre titre="Glucides" valeur={String(bilan.moyennes.gluc)} unite="g / jour" />
+              <Chiffre titre="Lipides" valeur={String(bilan.moyennes.lip)} unite="g / jour" />
+            </View>
             <Chiffre titre="Repas notés" valeur={String(bilan.repasNotes)} unite={`sur ${bilan.repasAttendus}`} />
           </View>
 

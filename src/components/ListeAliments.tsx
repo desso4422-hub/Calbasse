@@ -3,6 +3,7 @@ import { Pressable, ScrollView, TextInput, View } from 'react-native';
 import { categories, rechercherAliments, type Aliment, type Categorie } from '../lib/aliments.ts';
 import { couleurs, polices } from '../theme';
 import { Icone } from './Icone';
+import { MacrosCourt } from './Macros';
 import { T } from './T';
 import { Puce } from './ui';
 
@@ -74,7 +75,7 @@ export function ListeAliments({ onChoisir, entete }: { onChoisir: (a: Aliment) =
             key={a.id}
             onPress={() => onChoisir(a)}
             accessibilityRole="button"
-            accessibilityLabel={`${a.nom}, ${a.kcal} kilocalories et ${a.prot} grammes de protéines pour 100 grammes`}
+            accessibilityLabel={`${a.nom}, pour 100 grammes : ${a.kcal} kilocalories, ${Math.round(a.prot)} grammes de protéines, ${Math.round(a.gluc)} grammes de glucides, ${Math.round(a.lip)} grammes de lipides`}
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'center',
@@ -104,9 +105,7 @@ export function ListeAliments({ onChoisir, entete }: { onChoisir: (a: Aliment) =
               <T g={800} taille={14}>
                 {a.kcal} kcal
               </T>
-              <T g={700} taille={12} couleur={couleurs.terreFoncee}>
-                {Math.round(a.prot)} g prot.
-              </T>
+              <MacrosCourt n={{ kcal: a.kcal, prot: Math.round(a.prot), gluc: Math.round(a.gluc), lip: Math.round(a.lip) }} taille={11} />
             </View>
           </Pressable>
         ))}

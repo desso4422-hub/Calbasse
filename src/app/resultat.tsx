@@ -4,6 +4,7 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { AlimentsReconnus } from '../components/AlimentsReconnus';
 import { Assiette } from '../components/Graphiques';
 import { Icone } from '../components/Icone';
+import { Macros } from '../components/Macros';
 import { T } from '../components/T';
 import { Bouton, BoutonRond, Segment } from '../components/ui';
 import { trouverAliment } from '../lib/aliments.ts';
@@ -138,45 +139,34 @@ export default function Resultat() {
                 />
               </View>
 
-              <View style={{ backgroundColor: couleurs.encre, borderRadius: 22, paddingVertical: 16, paddingHorizontal: 18, gap: 12 }}>
+              <View style={{ backgroundColor: couleurs.encre, borderRadius: 22, paddingVertical: 16, paddingHorizontal: 18, gap: 14 }}>
                 <View style={{ flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' }}>
                   <View style={{ gap: 2 }}>
                     <T g={700} taille={12} couleur={couleurs.sableClair}>
-                      Protéines
-                    </T>
-                    <T g={800} taille={42} couleur={couleurs.peche}>
-                      {total.prot}
-                      <T g={700} taille={18} couleur={couleurs.peche}>
-                        {' '}g
-                      </T>
-                    </T>
-                  </View>
-                  <View style={{ alignItems: 'flex-end', gap: 2 }}>
-                    <T g={700} taille={12} couleur={couleurs.sableClair}>
                       Calories
                     </T>
-                    <T g={800} taille={28} couleur={couleurs.sable}>
+                    <T g={800} taille={42} couleur={couleurs.peche}>
                       {formater(total.kcal)}
-                      <T g={700} taille={14} couleur={couleurs.sable}>
+                      <T g={700} taille={18} couleur={couleurs.peche}>
                         {' '}kcal
                       </T>
                     </T>
-                    <T g={500} taille={12} couleur={couleurs.sableClair}>
-                      Entre {formater(f.bas)} et {formater(f.haut)}
-                    </T>
                   </View>
-                </View>
-                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', borderTopWidth: 1, borderTopColor: '#4A3322', paddingTop: 10 }}>
-                  <T g={500} taille={12} couleur={couleurs.sableClair}>
-                    Glucides {total.gluc} g · Lipides {total.lip} g
+                  <T g={500} taille={12} couleur={couleurs.sableClair} style={{ textAlign: 'right' }}>
+                    Entre {formater(f.bas)}{'\n'}et {formater(f.haut)} kcal
                   </T>
-                  <Pressable onPress={() => router.push('/detail')} accessibilityRole="link" hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <T g={700} taille={12} couleur={couleurs.peche}>
-                      Détail et sources
-                    </T>
-                    <Icone nom="droite" taille={14} couleur={couleurs.peche} epaisseur={2.6} />
-                  </Pressable>
                 </View>
+
+                <View style={{ borderTopWidth: 1, borderTopColor: '#4A3322', paddingTop: 12 }}>
+                  <Macros n={total} ton="sombre" />
+                </View>
+
+                <Pressable onPress={() => router.push('/detail')} accessibilityRole="link" hitSlop={8} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, borderTopWidth: 1, borderTopColor: '#4A3322', paddingTop: 10 }}>
+                  <T g={700} taille={12} couleur={couleurs.peche}>
+                    Détail et sources
+                  </T>
+                  <Icone nom="droite" taille={14} couleur={couleurs.peche} epaisseur={2.6} />
+                </Pressable>
               </View>
 
               <Bouton titre={`Enregistrer dans ${nomsCreneaux[b.creneau]}`} onPress={enregistrer} hauteur={54} />

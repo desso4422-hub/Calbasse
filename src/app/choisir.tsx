@@ -2,6 +2,7 @@ import { router, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Assiette } from '../components/Graphiques';
 import { ListeAliments } from '../components/ListeAliments';
+import { MacrosCourt } from '../components/Macros';
 import { T } from '../components/T';
 import { BoutonRond, Ecran } from '../components/ui';
 import { arrondirNutriments, formater, totalRepas } from '../lib/nutrition.ts';
@@ -80,8 +81,9 @@ export default function Choisir() {
                     {p.nom}
                   </T>
                   <T g={700} taille={12} couleur={couleurs.terreFoncee}>
-                    {formater(t.kcal)} kcal · {t.prot} g
+                    {formater(t.kcal)} kcal
                   </T>
+                  <MacrosCourt n={t} taille={11} />
                 </Pressable>
               );
             })}

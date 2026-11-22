@@ -1,11 +1,13 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, View } from 'react-native';
-import { Anneau, Assiette, Jauge } from '../../components/Graphiques';
+import { Anneau, Assiette } from '../../components/Graphiques';
 import { Icone } from '../../components/Icone';
+import { Macros, MacrosCourt } from '../../components/Macros';
 import { T } from '../../components/T';
 import { CarteScanEnAttente } from '../../components/ScanEnAttente';
 import { Ecran } from '../../components/ui';
+import { serveurConfigure } from '../../services/api';
 import { fonctions } from '../../config';
 import {
   additionner,
@@ -46,7 +48,7 @@ export default function Aujourdhui() {
   const cibles = profil.cibles;
   const total = totalJour(etat, jour);
   const repas = repasDuJour(etat, jour);
-  const resteProt = Math.max(0, cibles.prot - total.prot);
+  const resteKcal = Math.max(0, cibles.kcal - total.kcal);
   const restants = scansRestants(etat);
   const premium = estPremium(etat);
 
@@ -72,16 +74,26 @@ export default function Aujourdhui() {
         <Pressable
           onPress={() => (fonctions.premium ? router.push('/premium') : router.push('/scanner'))}
           accessibilityRole="button"
-          accessibilityLabel={premium ? `Premium, ${restants} scans restants` : fonctions.premium ? `${restants} scans gratuits restants. Passer à Premium` : `${restants} scans restants aujourd'hui`}
+          accessibilityLabel={
+            !serveurConfigure
+              ? 'Scanner un plat'
+              : premium
+                ? `Premium, ${restants} scans restants`
+                : fonctions.premium
+                  ? `${restants} scans gratuits restants. Passer à Premium`
+                  : `${restants} scans restants aujourd'hui`
+          }
           style={{ flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: couleurs.terreDouce, borderRadius: 999, paddingVertical: 8, paddingHorizontal: 12 }}
         >
           <Icone nom="appareil" taille={16} couleur={couleurs.terreFoncee} />
           <T g={700} taille={12} couleur={couleurs.terreFoncee}>
-            {premium
-              ? `Premium · ${restants}`
-              : fonctions.premium
-                ? `${restants} scan${restants > 1 ? 's' : ''} gratuit${restants > 1 ? 's' : ''}`
-                : `${restants} scan${restants > 1 ? 's' : ''} restant${restants > 1 ? 's' : ''}`}
+            {!serveurConfigure
+              ? 'Scanner un plat'
+              : premium
+                ? `Premium · ${restants}`
+                : fonctions.premium
+                  ? `${restants} scan${restants > 1 ? 's' : ''} gratuit${restants > 1 ? 's' : ''}`
+                  : `${restants} scan${restants > 1 ? 's' : ''} restant${restants > 1 ? 's' : ''}`}
           </T>
         </Pressable>
       </View>
@@ -92,7 +104,7 @@ export default function Aujourdhui() {
           const futur = cle > cleAujourdhui;
           const actif = cle === jour;
           const t = futur ? null : totalJour(etat, cle);
-          const atteint = !!t && t.prot >= cibles.prot;
+          const atteint = !!t && t.kcal >= cibles.kcal;
           const entame = !!t && t.kcal > 0;
           return (
             <Pressable
@@ -125,53 +137,41 @@ export default function Aujourdhui() {
         })}
       </View>
 
-      <View style={{ backgroundColor: couleurs.blanc, borderWidth: 1, borderColor: couleurs.traits, borderRadius: 24, padding: 16, flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-        <View style={{ width: 132, height: 132 }}>
-          <Anneau progression={total.prot / cibles.prot} />
-          <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
-            <T g={800} taille={32}>
-              {total.prot}
-            </T>
-            <T g={600} taille={12} couleur={couleurs.encre2}>
-              g / {cibles.prot} g
-            </T>
-            <T g={700} taille={11} couleur={couleurs.terreFoncee} style={{ marginTop: 2 }}>
-              Protéines
-            </T>
+      <View style={{ backgroundColor: couleurs.blanc, borderWidth: 1, borderColor: couleurs.traits, borderRadius: 24, padding: 16, gap: 14 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <View style={{ width: 132, height: 132 }}>
+            <Anneau progression={total.kcal / cibles.kcal} />
+            <View style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, alignItems: 'center', justifyContent: 'center' }}>
+              <T g={800} taille={30}>
+                {formater(total.kcal)}
+              </T>
+              <T g={600} taille={12} couleur={couleurs.encre2}>
+                / {formater(cibles.kcal)}
+              </T>
+              <T g={700} taille={11} couleur={couleurs.terreFoncee} style={{ marginTop: 2 }}>
+                Calories
+              </T>
+            </View>
           </View>
-        </View>
-        <View style={{ flex: 1, gap: 8, minWidth: 0 }}>
-          <T g={700} taille={12} couleur={couleurs.encre2}>
-            Calories
-          </T>
-          <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4, flexWrap: 'wrap' }}>
-            <T g={800} taille={24}>
-              {formater(total.kcal)}
-            </T>
-            <T g={600} taille={12} couleur={couleurs.encre2}>
-              / {formater(cibles.kcal)} kcal
-            </T>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            <Macros n={total} cibles={cibles} />
           </View>
-          <Jauge progression={total.kcal / cibles.kcal} />
-          <T g={500} taille={12} couleur={couleurs.encre2}>
-            Glucides {total.gluc} g · Lipides {total.lip} g
-          </T>
         </View>
       </View>
 
       <T taille={14} interligne={1.45} couleur={couleurs.encre2}>
-        {resteProt > 0 ? (
+        {resteKcal > 0 ? (
           <>
-            {estAujourdhui ? 'Il te reste ' : 'Il manquait '}
+            {estAujourdhui ? 'Il te reste ' : 'Il restait '}
             <T g={700} taille={14} couleur={couleurs.encre}>
-              {resteProt} g de protéines
+              {formater(resteKcal)} kcal
             </T>
-            {estAujourdhui ? ' pour atteindre ton objectif du jour.' : ' ce jour-là pour atteindre ton objectif.'}
+            {estAujourdhui ? ' avant ton objectif du jour.' : ' ce jour-là avant ton objectif.'}
           </>
         ) : (
           <>
             <T g={700} taille={14} couleur={couleurs.encre}>
-              Objectif protéines atteint.
+              Objectif du jour atteint.
             </T>{' '}
             {estAujourdhui ? 'Bien joué, continue comme ça.' : 'Belle journée.'}
           </>
@@ -198,7 +198,7 @@ export default function Aujourdhui() {
                 router.push('/detail');
               }}
               accessibilityRole="button"
-              accessibilityLabel={`${nomsCreneaux[r.creneau]}, ${r.nom}, ${t.kcal} kilocalories, ${t.prot} grammes de protéines`}
+              accessibilityLabel={`${nomsCreneaux[r.creneau]}, ${r.nom}, ${t.kcal} kilocalories, ${t.prot} grammes de protéines, ${t.gluc} grammes de glucides, ${t.lip} grammes de lipides`}
               style={({ pressed }) => ({
                 flexDirection: 'row',
                 alignItems: 'center',
@@ -224,9 +224,7 @@ export default function Aujourdhui() {
                 <T g={700} taille={14}>
                   {formater(t.kcal)} kcal
                 </T>
-                <T g={700} taille={12} couleur={couleurs.terreFoncee}>
-                  {t.prot} g prot.
-                </T>
+                <MacrosCourt n={t} />
               </View>
             </Pressable>
           );
