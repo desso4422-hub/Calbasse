@@ -3,8 +3,14 @@
 Transforme les 8 rushs sortis de Flow (4 UGC × 2 parties) en une vidéo finie : 9:16, 1080×1920,
 sous-titres, zooms, motion design, volume homogène.
 
-Sorties (non versionnées, trop lourdes) : `calbasse-perte-de-poids-v3.mp4`.
-Versionné : `calbasse-perte-de-poids-v3.srt`, les sous-titres importables dans CapCut.
+Une config par créative :
+
+| Config | Vidéo produite |
+| --- | --- |
+| `config-perte-de-poids.json` | `calbasse-perte-de-poids-v3.mp4` |
+| `config-prise-de-masse.json` | `calbasse-prise-de-masse-v1.mp4` |
+
+Les vidéos ne sont pas versionnées (trop lourdes). Versionnés : les `.srt`, sous-titres importables dans CapCut.
 
 ## Refaire le montage
 
@@ -13,7 +19,7 @@ Versionné : `calbasse-perte-de-poids-v3.srt`, les sous-titres importables dans 
 3. Lance :
 
 ```bash
-python3 assembler.py config-perte-de-poids.json
+python3 assembler.py config-prise-de-masse.json      # ou config-perte-de-poids.json
 ```
 
 Pour essayer vite un passage, ajoute `--extrait 20,32` (seules ces secondes sont dessinées).
@@ -46,6 +52,7 @@ Chaque clip peut avoir une liste `animations`, déclenchées par un mot du texte
 {"type": "pastille", "mot": "riz", "texte": "Le riz ?", "icone": "?", "style": "terre", "duree": 1.8}
 {"type": "carte_scan", "mot": "photographies", "plat": "Attiéké, poisson braisé", "kcal": 615, "prot": 35, "gluc": 84, "lip": 14, "fin": "clip"}
 {"type": "viseur_portion", "mot": "photographie", "mot_portion": "portion", "mot_bascule": "réduis", "mot_fin": "semaines"}
+{"type": "viseur", "mot": "photographie", "mot_fin": "j'ai"}
 {"type": "whatsapp", "mot": "WhatsApp", "fin": "video"}
 ```
 
@@ -53,6 +60,11 @@ Chaque clip peut avoir une liste `animations`, déclenchées par un mot du texte
 - Une pastille reste affichée au moins 1,2 s, et rien ne déborde sur l'avatar suivant.
 - La carte de scan reprend l'écran de résultat de l'app. **Ses chiffres sont ceux de la base de
   l'app, qui sont encore des valeurs d'illustration** : à remplacer par des valeurs validées.
+- Un mot précédé de `~` dans le texte est dit mais pas affiché (un mot que l'IA ajoute et qu'on ne
+  sait pas écrire) : il compte pour le calage, donc les sous-titres suivants ne se décalent pas.
+  Le point d'une phrase se met sur le mot visible qui précède (`protéines. ~serre Je…`).
+- `vitesse_min`, `vitesse_max`, `cadence_syllabes_par_s` règlent l'uniformisation. Des avatars qui
+  parlent très vite demandent de laisser descendre `vitesse_min` (0,85) pour rester à la même cadence.
 - `badge` (au niveau de la config) fait apparaître le logo Calbasse à partir d'un mot.
 - `zoom_force` (dans un clip) impose un zoom pendant un passage : c'est ce qui cache les faux
   sous-titres que l'IA incruste parfois en bas de l'image.

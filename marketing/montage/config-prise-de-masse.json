@@ -1,0 +1,251 @@
+{
+  "sortie": "calbasse-prise-de-masse-v1.mp4",
+  "police_dossier": "police",
+  "temp": "/tmp/claude-0/-home-user-Calbasse/f8ce0a80-532c-5a90-811b-6edf5f24d622/scratchpad/montage_tmp2",
+  "cadence_syllabes_par_s": 6.5,
+  "vitesse_min": 0.85,
+  "vitesse_max": 1.35,
+  "vitesse_pause": 3.0,
+  "cible_morceau_lufs": -21.0,
+  "crf": 20,
+  "sons": true,
+  "badge": {
+    "clip": 1,
+    "mot": "app"
+  },
+  "clips": [
+    {
+      "ugc": 1,
+      "fichier": "rushs/prise-ugc1-partie1.mp4",
+      "debut": 0.0,
+      "fin": 7.93,
+      "texte": "Arrête de manger plus pour grossir, ça ne sert à rien. Moi, je mangeais trois fois par jour, je ne prenais pas un gramme.",
+      "animations": [
+        {
+          "type": "pastille",
+          "mot": "plus",
+          "texte": "Manger plus ?",
+          "icone": "?",
+          "style": "terre",
+          "mot_fin": "moi"
+        },
+        {
+          "type": "pastille",
+          "mot": "trois",
+          "texte": "3 repas par jour",
+          "icone": "check",
+          "style": "nuit",
+          "mot_fin": "prenais"
+        },
+        {
+          "type": "pastille",
+          "mot": "prenais",
+          "texte": "Aucun gain de poids",
+          "icone": "!",
+          "style": "alerte",
+          "fin": "clip"
+        }
+      ]
+    },
+    {
+      "ugc": 1,
+      "fichier": "rushs/prise-ugc1-partie2.mp4",
+      "debut": 0.0,
+      "fin": 7.62,
+      "texte": "Mon problème, c'est que je ne savais pas combien je mangeais vraiment. Il y a une app qui compte pour toi, avec une simple photo.",
+      "animations": [
+        {
+          "type": "pastille",
+          "mot": "combien",
+          "texte": "Combien je mange ?",
+          "icone": "?",
+          "style": "terre",
+          "mot_fin": "il"
+        },
+        {
+          "type": "carte_scan",
+          "mot": "app",
+          "plat": "Riz au gras, poulet frit",
+          "kcal": 866,
+          "prot": 39,
+          "gluc": 84,
+          "lip": 42,
+          "fin": "clip"
+        }
+      ]
+    },
+    {
+      "ugc": 2,
+      "fichier": "rushs/prise-ugc2-partie1.mp4",
+      "debut": 0.2,
+      "fin": 7.93,
+      "texte": "Moi, depuis le lycée, on m'appelait planche. Je mangeais mon eru, mes beignets, rien ne venait.",
+      "animations": [
+        {
+          "type": "pastille",
+          "mot": "m'appelait",
+          "texte": "Surnom : planche",
+          "icone": "!",
+          "style": "terre",
+          "mot_fin": "je"
+        },
+        {
+          "type": "pastille",
+          "mot": "eru",
+          "texte": "Eru, beignets",
+          "icone": "check",
+          "style": "nuit",
+          "fin": "clip"
+        }
+      ]
+    },
+    {
+      "ugc": 2,
+      "fichier": "rushs/prise-ugc2-partie2.mp4",
+      "debut": 0.0,
+      "fin": 7.93,
+      "zoom_force": {
+        "de": 4.45,
+        "a": 7.93,
+        "niveau": 1.22
+      },
+      "texte": "Avec Calbasse, je photographie chaque plat, j'ai vu que je mangeais à peine la moitié de ce qu'il me fallait. J'ai ajouté deux repas, et aujourd'hui on me demande mon secret.",
+      "animations": [
+        {
+          "type": "viseur",
+          "mot": "photographie",
+          "mot_fin": "j'ai"
+        },
+        {
+          "type": "pastille",
+          "mot": "moitié",
+          "texte": "Moitié des besoins",
+          "icone": "!",
+          "style": "alerte",
+          "mot_fin": "ajouté"
+        },
+        {
+          "type": "pastille",
+          "mot": "ajouté",
+          "texte": "+ 2 repas",
+          "icone": "check",
+          "style": "ok",
+          "mot_fin": "aujourd'hui"
+        },
+        {
+          "type": "pastille",
+          "mot": "aujourd'hui",
+          "texte": "Résultat visible",
+          "icone": "check",
+          "style": "ok",
+          "fin": "clip"
+        }
+      ]
+    },
+    {
+      "ugc": 3,
+      "fichier": "rushs/prise-ugc3-partie1.mp4",
+      "debut": 0.0,
+      "fin": 7.93,
+      "texte": "Moi, je soulevais la fonte depuis un an. Zéro résultat. Je croyais que c'était mon entraînement.",
+      "animations": [
+        {
+          "type": "pastille",
+          "mot": "soulevais",
+          "texte": "1 an de fonte",
+          "icone": "check",
+          "style": "nuit",
+          "mot_fin": "croyais"
+        },
+        {
+          "type": "pastille",
+          "mot": "croyais",
+          "texte": "Mon entraînement ?",
+          "icone": "?",
+          "style": "terre",
+          "fin": "clip"
+        }
+      ]
+    },
+    {
+      "ugc": 3,
+      "fichier": "rushs/prise-ugc3-partie2.mp4",
+      "debut": 0.0,
+      "fin": 7.93,
+      "texte": "En fait, c'était les protéines. ~serre Je photographie mon garba, l'app me dit ce qu'il y a dedans. J'ai corrigé mes repas, et mes bras remplissent enfin mes manches.",
+      "animations": [
+        {
+          "type": "pastille",
+          "mot": "protéines",
+          "texte": "Les protéines",
+          "icone": "?",
+          "style": "terre",
+          "mot_fin": "photographie"
+        },
+        {
+          "type": "carte_scan",
+          "mot": "garba",
+          "mot_fin": "corrigé",
+          "plat": "Garba (attiéké, thon frit)",
+          "kcal": 647,
+          "prot": 33,
+          "gluc": 89,
+          "lip": 17
+        },
+        {
+          "type": "pastille",
+          "mot": "corrigé",
+          "texte": "Repas corrigés",
+          "icone": "check",
+          "style": "ok",
+          "mot_fin": "bras"
+        },
+        {
+          "type": "pastille",
+          "mot": "bras",
+          "texte": "Bras plus pleins",
+          "icone": "check",
+          "style": "ok",
+          "fin": "clip"
+        }
+      ]
+    },
+    {
+      "ugc": 4,
+      "fichier": "rushs/prise-ugc4-partie1.mp4",
+      "debut": 0.0,
+      "fin": 7.93,
+      "texte": "Si tu manges et que ton corps ne change jamais, arrête de deviner. Écris-nous sur WhatsApp, le bouton est juste en bas.",
+      "animations": [
+        {
+          "type": "pastille",
+          "mot": "corps",
+          "texte": "Ton corps ne change pas",
+          "icone": "!",
+          "style": "terre",
+          "mot_fin": "deviner"
+        },
+        {
+          "type": "pastille",
+          "mot": "deviner",
+          "texte": "Arrête de deviner",
+          "icone": "!",
+          "style": "alerte",
+          "mot_fin": "écris-nous"
+        },
+        {
+          "type": "whatsapp",
+          "mot": "WhatsApp",
+          "fin": "video"
+        }
+      ]
+    },
+    {
+      "ugc": 4,
+      "fichier": "rushs/prise-ugc4-partie2.mp4",
+      "debut": 0.0,
+      "fin": 7.93,
+      "texte": "On t'installe Calbasse, tu photographies ton piron ce soir, et tu sauras exactement ce que tu manges."
+    }
+  ]
+}

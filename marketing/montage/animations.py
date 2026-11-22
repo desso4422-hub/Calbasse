@@ -349,9 +349,9 @@ class ViseurPortion(Calque):
         return out
 
     def dessiner(self, image, t):
-        if t < self.t_portion:
+        if self.t_portion is None or t < self.t_portion:       # sans portion : le viseur seul, jusqu'à la fin
             e, o = entree(t, self.t0, 0.35)
-            e2, o2 = sortie(t, self.t_portion, 0.18)
+            e2, o2 = sortie(t, self.t1 if self.t_portion is None else self.t_portion, 0.2)
             poser(image, self._viseur(t - self.t0), W / 2, self.cy, e * e2, o * o2)
         else:
             e, o = entree(t, self.t_portion, 0.4)

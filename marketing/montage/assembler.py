@@ -121,6 +121,8 @@ def construire_calque(a, mots, t_mots, decalage, fin_clip, fin_video):
         return A.CarteScan(t0, t1, a["plat"], a["kcal"], a["prot"], a["gluc"], a["lip"], cy=a.get("cy", 1560))
     if typ == "viseur_portion":
         return A.ViseurPortion(t0, t1, temps_du_mot(a["mot_portion"], mots, t_mots, decalage), temps_du_mot(a["mot_bascule"], mots, t_mots, decalage), cy=a.get("cy", 1560))
+    if typ == "viseur":
+        return A.ViseurPortion(t0, t1, None, None, cy=a.get("cy", 1560))
     if typ == "whatsapp":
         return A.BoutonWhatsApp(t0, t1, cy=a.get("cy", 1520))
     raise SystemExit(f"Type d'animation inconnu : {typ}")
@@ -146,11 +148,15 @@ def main(cfg_path, extrait=None):
         sr, x = P.audio_mono(src, tmp / (src.stem + ".wav"))
         debut, fin = c.get("debut", 0.0), min(c.get("fin", P.duree_media(src)), P.duree_media(src))
         tranches, voix = P.analyser_voix(x, sr, debut, fin)
-        mots = c["texte"].split(" ")      # espace ordinaire seulement : « toi ? » garde son espace insécable
-        cadence = sum(P.syllabes(m) for m in mots) / voix
+        tous = c["texte"].split(" ")      # espace ordinaire seulement : « toi ? » garde son espace insécable
+        # Un mot préfixé de ~ est dit mais pas affiché (mot que l'IA ajoute et qu'on ne sait pas écrire) :
+        # il compte pour le calage, ce qui évite de décaler les sous-titres qui suivent.
+        mots = [m for m in tous if not m.startswith("~")]
+        cadence = sum(P.syllabes(m.lstrip("~")) for m in tous) / voix
         vitesse = min(vmax, max(vmin, cible / cadence))
         carte, n = P.carte_temps(tranches, vitesse, v_pause)
-        t_src = P.minutage_mots(mots, x, sr, debut, fin)
+        t_tous = P.minutage_mots([m.lstrip("~") for m in tous], x, sr, debut, fin)
+        t_src = [t_tous[i] for i, m in enumerate(tous) if not m.startswith("~")] + [t_tous[-1]]
         t_mots = [P.src_vers_sortie(t, carte) for t in t_src]
         infos.append(dict(cfg=c, src=str(src), debut=debut, fin=fin, carte=carte, n=n, mots=mots, t_mots=t_mots, vitesse=vitesse, cadence=cadence,
                           decalage=decalage, lufs=P.loudness(src), ugc=c.get("ugc", i // 2 + 1)))
