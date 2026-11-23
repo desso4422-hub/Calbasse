@@ -43,7 +43,31 @@ Pour tout réafficher : `EXPO_PUBLIC_MVP=0` dans `.env.local` (voir `src/config.
 - **Aucune photo perdue** : si le réseau ne suit pas, ou si l'utilisateur ne veut pas attendre, la photo est gardée sur le téléphone et le repas apparaît dans Aujourd'hui (« En attente de réseau »). Il est analysé automatiquement dès que la connexion revient, puis passe à « Prêt à vérifier ». Ça marche aussi si l'app est fermée entre-temps.
 - **Jamais compté deux fois** : chaque photo porte une clé unique. Si elle est renvoyée (coupure pendant la réponse, file d'attente), le serveur rend le même résultat sans refaire l'analyse ni décompter un scan.
 
-## Application Android (APK) sans serveur
+## En production : Supabase
+
+Pour de vrais utilisateurs, l'app parle à **Supabase** (dossier `supabase/`), jamais directement au modèle :
+
+| Élément | Où | Rôle |
+| --- | --- | --- |
+| `supabase/migrations/` | base de données | scans, corrections, signalements ; quota par personne, plafond global, anti-rafale, un scan en échec ne coûte rien |
+| `supabase/functions/api/` | fonction serveur | `/scan`, `/compte`, `/corrections`, `/signalements`, suppression du compte ; **la clé RodiumAI n'existe que là** |
+| `supabase/functions/_shared/` | copie | consignes et catalogue d'aliments, copiés depuis `src/lib/` (`npm run sync:supabase`) |
+| `src/services/supabase.ts` | app | compte anonyme + renouvellement du jeton |
+
+Tests, sans aucun compte :
+
+```bash
+npm test                       # app + mentions légales + garde-fou de diffusion
+npm run test:supabase          # logique de la fonction serveur (22 tests)
+scripts/tester-base.sh         # base de données sur un PostgreSQL local (quotas, verrouillage)
+RODIUMAI_API_KEY=… node --experimental-strip-types supabase/tests/faux-supabase.ts   # faux Supabase pour essayer l'app
+```
+
+Mise en ligne pas à pas : `docs/MISE-EN-LIGNE.md`. Le texte de confidentialité : `docs/confidentialite.md`.
+Les variables d'une version diffusée (`EXPO_PUBLIC_SUPABASE_URL`, `…_ANON_KEY`, `EXPO_PUBLIC_CONTACT`) sont dans `eas.json` ;
+`npm run verifier:production` refuse de construire si l'une manque. Le serveur Node de `server/` reste utilisable en local.
+
+## Application Android (APK) sans serveur, pour développer
 
 Calbasse peut aussi tourner **sans serveur** : l'app interroge elle-même le modèle de vision
 (RodiumAI). C'est le mode de l'APK autonome, construit avec `EXPO_PUBLIC_VISION_DIRECTE=1`.

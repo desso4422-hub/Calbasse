@@ -1,6 +1,6 @@
 import { router } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { TextInput, View } from 'react-native';
+import { TextInput, View, Pressable } from 'react-native';
 import { Logo } from '../components/Graphiques';
 import { Icone, type NomIcone } from '../components/Icone';
 import { Macros } from '../components/Macros';
@@ -68,7 +68,16 @@ export default function Onboarding() {
     ) : etape === 2 ? (
       <Bouton titre="Voir mes objectifs" onPress={() => setEtape(3)} desactive={!mesures} />
     ) : (
-      <Bouton titre={existant ? 'Enregistrer' : 'Commencer'} onPress={terminer} />
+      <>
+        {existant ? null : (
+          <Pressable onPress={() => router.push('/confidentialite')} accessibilityRole="link" hitSlop={8}>
+            <T taille={12} couleur={couleurs.encre2} centre interligne={1.4}>
+              En continuant, tu acceptes nos <T g={700} taille={12} couleur={couleurs.terreFoncee}>conditions et notre politique de confidentialité</T>.
+            </T>
+          </Pressable>
+        )}
+        <Bouton titre={existant ? 'Enregistrer' : 'Commencer'} onPress={terminer} />
+      </>
     );
 
   return (

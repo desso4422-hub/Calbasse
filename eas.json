@@ -4,19 +4,28 @@
     "appVersionSource": "remote"
   },
   "build": {
-    "apercu": {
+    "testeurs": {
       "distribution": "internal",
+      "channel": "testeurs",
       "android": {
         "buildType": "apk"
       },
       "env": {
-        "EXPO_PUBLIC_VISION_DIRECTE": "1"
+        "EXPO_PUBLIC_SUPABASE_URL": "A_REMPLIR",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "A_REMPLIR",
+        "EXPO_PUBLIC_CONTACT": "A_REMPLIR"
       }
     },
     "production": {
+      "channel": "production",
       "autoIncrement": true,
+      "android": {
+        "buildType": "app-bundle"
+      },
       "env": {
-        "EXPO_PUBLIC_VISION_DIRECTE": "1"
+        "EXPO_PUBLIC_SUPABASE_URL": "A_REMPLIR",
+        "EXPO_PUBLIC_SUPABASE_ANON_KEY": "A_REMPLIR",
+        "EXPO_PUBLIC_CONTACT": "A_REMPLIR"
       }
     }
   }

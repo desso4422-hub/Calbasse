@@ -7,6 +7,7 @@ import { T } from '../components/T';
 import { Bouton, BoutonRond, Ecran, Etiquette } from '../components/ui';
 import { trouverAliment } from '../lib/aliments.ts';
 import { arrondirNutriments, cleJour, formater, nutrimentsLigne, totalRepas } from '../lib/nutrition.ts';
+import { envoyerSignalement } from '../services/api';
 import { avecGrammes, lignesEffectives, nomBrouillon, retirerAliment, useBrouillon, versRepas } from '../state/brouillon';
 import { nomsCreneaux, useStore } from '../state/store';
 import { couleurs } from '../theme';
@@ -46,7 +47,9 @@ export default function Detail() {
 
   const signaler = () => {
     for (const l of lignes) {
-      dispatch({ type: 'signaler', signalement: { jour: cleJour(new Date()), alimentId: l.alimentId, repasNom: nomBrouillon(b) } });
+      const signalement = { jour: cleJour(new Date()), alimentId: l.alimentId, repasNom: nomBrouillon(b) };
+      dispatch({ type: 'signaler', signalement });
+      envoyerSignalement(signalement);
     }
     setSignale(true);
   };

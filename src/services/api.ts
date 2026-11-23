@@ -9,12 +9,15 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import Constants from 'expo-constants';
 import { Platform } from 'react-native';
+import { adresseApiSupabase, cleSupabase, ErreurAuth, jetonSupabase, oublierSession, supabaseConfigure } from './supabase';
 
 /**
- * Adresse du serveur. « auto » (développement) : le serveur tourne sur le même ordinateur que
+ * Adresse du serveur. Si Supabase est configuré (EXPO_PUBLIC_SUPABASE_URL et _ANON_KEY), c'est sa fonction « api ».
+ * Sinon EXPO_PUBLIC_API_URL. « auto » (développement) : le serveur tourne sur le même ordinateur que
  * `npx expo start`, sur le port 8787 ; l'app retrouve l'adresse de cet ordinateur toute seule.
  */
 function adresseServeur(): string | undefined {
+  if (adresseApiSupabase) return adresseApiSupabase;
   const brut = process.env.EXPO_PUBLIC_API_URL?.trim();
   if (brut !== 'auto') return brut ? brut.replace(/\/+$/, '') : undefined;
   const hote = Constants.expoConfig?.hostUri?.split(':')[0] ?? (typeof window !== 'undefined' ? window.location?.hostname : undefined);
@@ -64,6 +67,14 @@ async function creerCompte(): Promise<string> {
 }
 
 async function jeton(): Promise<string> {
+  if (supabaseConfigure) {
+    try {
+      return await jetonSupabase();
+    } catch (e) {
+      if (e instanceof ErreurAuth) throw new ErreurApi(e.message, e.statut, {});
+      throw e;
+    }
+  }
   // Un seul compte créé même si plusieurs appels partent en même temps
   jetonEnCours ??= (async () => (await stockage.lire()) ?? (await creerCompte()))().finally(() => {
     jetonEnCours = null;
@@ -85,6 +96,7 @@ async function requete(
       headers: {
         'Content-Type': 'application/json',
         ...(init.jeton ? { Authorization: `Bearer ${init.jeton}` } : {}),
+        ...(supabaseConfigure ? { apikey: cleSupabase } : {}),
       },
       body: init.corps === undefined ? undefined : JSON.stringify(init.corps),
       signal: controle.signal,
@@ -106,6 +118,7 @@ export async function appelApi(chemin: string, init: { methode?: string; corps?:
   } catch (e) {
     if (e instanceof ErreurApi && e.statut === 401) {
       await stockage.effacer();
+      await oublierSession();
       return requete(chemin, { ...init, jeton: await jeton() });
     }
     throw e;
@@ -119,4 +132,18 @@ export async function lireCompte(): Promise<EtatCompteServeur> {
 /** Après une récupération de compte, l'appareil prend le jeton de l'ancien compte. */
 export async function remplacerJeton(nouveau: string): Promise<void> {
   await stockage.ecrire(nouveau);
+}
+
+/** Supprime le compte en ligne et tout ce qui s'y rattache (scans, corrections, signalements). */
+export async function supprimerCompteServeur(): Promise<void> {
+  if (!serveurConfigure) return;
+  await appelApi('/compte', { methode: 'DELETE' });
+  await stockage.effacer().catch(() => {});
+  await oublierSession();
+}
+
+/** « Un chiffre me semble faux » : remonte au nutritionniste. Sans réseau, on laisse tomber : le signalement local reste. */
+export function envoyerSignalement(s: { jour: string; alimentId: string; repasNom: string }) {
+  if (!serveurConfigure) return;
+  appelApi('/signalements', { methode: 'POST', corps: s }).catch(() => {});
 }

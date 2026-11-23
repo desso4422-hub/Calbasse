@@ -1,0 +1,7 @@
+# Configuration Supabase de Calbasse (utilisée par la CLI Supabase).
+project_id = "calbasse"
+
+# La fonction « api » vérifie elle-même le jeton de chaque requête (voir functions/api/index.ts) : c'est
+# plus fiable que la vérification automatique avec les nouvelles clés de signature de Supabase.
+[functions.api]
+verify_jwt = false

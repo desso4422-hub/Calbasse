@@ -42,10 +42,15 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
-    "test": "node --test --experimental-strip-types src/lib/*.test.ts",
+    "test": "node --test --experimental-strip-types src/lib/*.test.ts scripts/*.test.mjs",
     "lint": "expo lint",
     "build:vercel": "node scripts/vercel-build.mjs",
-    "build:netlify": "node scripts/netlify-build.mjs"
+    "build:netlify": "node scripts/netlify-build.mjs",
+    "sync:supabase": "node scripts/sync-supabase.mjs",
+    "test:supabase": "node --test --experimental-strip-types supabase/functions/api/*.test.ts",
+    "mentions": "node --experimental-strip-types scripts/mentions-markdown.mjs",
+    "verifier:production": "node scripts/verifier-production.mjs",
+    "eas-build-pre-install": "node scripts/verifier-production.mjs"
   },
   "private": true
 }

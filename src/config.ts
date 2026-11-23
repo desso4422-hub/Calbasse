@@ -6,7 +6,11 @@
  */
 const mvp = process.env.EXPO_PUBLIC_MVP !== '0';
 
+/** Outils de développement (repas d'exemple, étiquettes techniques) : EXPO_PUBLIC_DEMO=1, jamais en production. */
+const demo = process.env.EXPO_PUBLIC_DEMO === '1';
+
 export const fonctions = {
+  demo,
   coach: !mvp,
   premium: !mvp,
   telephone: !mvp,

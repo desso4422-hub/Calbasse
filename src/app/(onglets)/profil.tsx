@@ -6,7 +6,8 @@ import { T } from '../../components/T';
 import { Ecran, Etiquette, TitreSection } from '../../components/ui';
 import { formater } from '../../lib/nutrition.ts';
 import { fonctions } from '../../config';
-import { serveurConfigure } from '../../services/api';
+import { serveurConfigure, supprimerCompteServeur } from '../../services/api';
+import { supprimerPhoto } from '../../services/photosEnAttente';
 import { modeReconnaissance } from '../../services/reconnaissance';
 import { estPremium, scansRestants, useStore } from '../../state/store';
 import { couleurs } from '../../theme';
@@ -22,6 +23,11 @@ function confirmer(titre: string, message: string, bouton: string, action: () =>
     { text: 'Annuler', style: 'cancel' },
     { text: bouton, style: 'destructive', onPress: action },
   ]);
+}
+
+function informer(titre: string, message: string) {
+  if (Platform.OS === 'web') globalThis.alert?.(`${titre}\n\n${message}`);
+  else Alert.alert(titre, message);
 }
 
 export default function Profil() {
@@ -98,12 +104,15 @@ export default function Profil() {
             onPress={() => router.push('/coach')}
           />
         ) : null}
-        <Ligne
-          icone="barres"
-          titre="Charger des repas d'exemple"
-          texte="Remplit les deux dernières semaines pour essayer le Bilan"
-          onPress={() => dispatch({ type: 'chargerDemo' })}
-        />
+        <Ligne icone="info" titre="Confidentialité et conditions" texte="Ce que Calbasse fait de tes données" onPress={() => router.push('/confidentialite')} />
+        {fonctions.demo ? (
+          <Ligne
+            icone="barres"
+            titre="Charger des repas d'exemple"
+            texte="Remplit les deux dernières semaines pour essayer le Bilan"
+            onPress={() => dispatch({ type: 'chargerDemo' })}
+          />
+        ) : null}
       </View>
 
       <View style={{ backgroundColor: couleurs.sable, borderRadius: 18, padding: 14, gap: 8 }}>
@@ -118,17 +127,31 @@ export default function Profil() {
           remplace pas un avis médical.
         </T>
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          <Etiquette texte={modeReconnaissance === 'demo' ? 'Reconnaissance : démo' : modeReconnaissance === 'direct' ? 'Reconnaissance : intégrée' : 'Reconnaissance : serveur'} ton="encre" petite />
+          {fonctions.demo || modeReconnaissance === 'demo' ? (
+            <Etiquette texte={modeReconnaissance === 'demo' ? 'Reconnaissance : démo' : modeReconnaissance === 'direct' ? 'Reconnaissance : intégrée' : 'Reconnaissance : serveur'} ton="encre" petite />
+          ) : null}
           {etat.signalements.length > 0 ? <Etiquette texte={`${etat.signalements.length} signalement(s) envoyés`} ton="feuille" petite /> : null}
         </View>
       </View>
 
       <Pressable
         onPress={() =>
-          confirmer('Tout effacer ?', 'Ton profil et tes repas seront supprimés de ce téléphone.', 'Effacer', () => {
-            dispatch({ type: 'reinitialiser' });
-            router.replace('/onboarding');
-          })
+          confirmer(
+            'Tout effacer ?',
+            serveurConfigure ? 'Ton profil et tes repas seront supprimés de ce téléphone, et ton compte en ligne sera supprimé.' : 'Ton profil et tes repas seront supprimés de ce téléphone.',
+            'Effacer',
+            async () => {
+              try {
+                await supprimerCompteServeur();
+              } catch {
+                informer('Suppression impossible', 'Ton compte en ligne n’a pas pu être supprimé. Vérifie ta connexion et réessaie : tes données n’ont pas été effacées.');
+                return;
+              }
+              (etat.scansEnAttente ?? []).forEach((x) => supprimerPhoto(x.photoUri));
+              dispatch({ type: 'reinitialiser' });
+              router.replace('/onboarding');
+            },
+          )
         }
         accessibilityRole="button"
         style={{ paddingVertical: 10 }}
