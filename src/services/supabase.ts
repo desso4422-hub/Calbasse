@@ -8,7 +8,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
-import { adresseApi, expireBientot, sessionDepuisReponse, sessionStockee, type Session } from '../lib/session.ts';
+import { adresseApi, erreurAuth, expireBientot, sessionDepuisReponse, sessionStockee, type CodeErreurAuth, type Session } from '../lib/session.ts';
 
 const URL_PROJET = (process.env.EXPO_PUBLIC_SUPABASE_URL ?? '').trim().replace(/\/+$/, '');
 const CLE_PUBLIQUE = (process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '').trim();
@@ -20,9 +20,11 @@ export const cleSupabase = CLE_PUBLIQUE;
 /** Problème de connexion : statut 0 = pas de réseau (passager), sinon réponse du service d'authentification. */
 export class ErreurAuth extends Error {
   readonly statut: number;
-  constructor(message: string, statut: number) {
+  readonly motif: CodeErreurAuth;
+  constructor(message: string, statut: number, motif: CodeErreurAuth = 'autre') {
     super(message);
     this.statut = statut;
+    this.motif = motif;
   }
 }
 
@@ -36,13 +38,13 @@ const coffre = {
 let session: Session | null = null;
 let enCours: Promise<string> | null = null;
 
-async function appelAuth(chemin: string, corps: object): Promise<{ statut: number; donnees: unknown }> {
+async function appelAuth(chemin: string, corps: object, init: { methode?: string; jeton?: string } = {}): Promise<{ statut: number; donnees: unknown }> {
   const controle = new AbortController();
   const minuterie = setTimeout(() => controle.abort(), 20_000);
   try {
     const reponse = await fetch(`${URL_PROJET}/auth/v1${chemin}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', apikey: CLE_PUBLIQUE },
+      method: init.methode ?? 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: CLE_PUBLIQUE, ...(init.jeton ? { Authorization: `Bearer ${init.jeton}` } : {}) },
       body: JSON.stringify(corps),
       signal: controle.signal,
     });
@@ -90,4 +92,47 @@ export function jetonSupabase(): Promise<string> {
 export async function oublierSession(): Promise<void> {
   session = null;
   await coffre.effacer().catch(() => {});
+}
+
+// ——— Compte avec e-mail ———
+// Le compte anonyme de ce téléphone reçoit un e-mail (même identifiant : le forfait et les scans le suivent), ou
+// un téléphone neuf se connecte à un compte existant. Dans les deux cas, Supabase envoie un CODE par e-mail
+// (le modèle d'e-mail doit contenir {{ .Token }}, voir docs/INSTALLATION-MANUELLE.md).
+
+function echec(statut: number, donnees: unknown): never {
+  const e = erreurAuth(statut, donnees);
+  throw new ErreurAuth(e.message, statut, e.code);
+}
+
+async function prendreSession(donnees: unknown): Promise<void> {
+  const s = sessionDepuisReponse(donnees, Date.now());
+  if (!s) throw new ErreurAuth('Réponse inattendue du service de connexion.', 502);
+  session = s;
+  await coffre.ecrire(JSON.stringify(s)).catch(() => {});
+}
+
+/** Étape 1 : envoie un code à cette adresse, pour la rattacher au compte de ce téléphone. */
+export async function demanderLiaison(email: string): Promise<void> {
+  const r = await appelAuth('/user', { email: email.trim() }, { methode: 'PUT', jeton: await jetonSupabase() });
+  if (r.statut < 200 || r.statut >= 300) echec(r.statut, r.donnees);
+}
+
+/** Étape 2 : le code reçu confirme l'adresse. Le compte n'est plus anonyme. */
+export async function confirmerLiaison(email: string, code: string): Promise<void> {
+  const r = await appelAuth('/verify', { type: 'email_change', email: email.trim(), token: code.replace(/\s/g, '') });
+  if (r.statut < 200 || r.statut >= 300) echec(r.statut, r.donnees);
+  await prendreSession(r.donnees);
+}
+
+/** Nouveau téléphone, étape 1 : envoie un code à l'adresse d'un compte existant (aucun compte n'est créé). */
+export async function demanderCodeConnexion(email: string): Promise<void> {
+  const r = await appelAuth('/otp', { email: email.trim(), create_user: false });
+  if (r.statut < 200 || r.statut >= 300) echec(r.statut, r.donnees);
+}
+
+/** Nouveau téléphone, étape 2 : le code ouvre le compte sur ce téléphone. */
+export async function confirmerConnexion(email: string, code: string): Promise<void> {
+  const r = await appelAuth('/verify', { type: 'email', email: email.trim(), token: code.replace(/\s/g, '') });
+  if (r.statut < 200 || r.statut >= 300) echec(r.statut, r.donnees);
+  await prendreSession(r.donnees);
 }

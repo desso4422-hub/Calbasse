@@ -30,14 +30,17 @@ export const confidentialite: Section[] = [
     titre: 'Ce que tu nous confies',
     paragraphes: [
       'Tes photos de plats. Quand tu scannes un plat, la photo est réduite puis envoyée à notre serveur, qui la transmet à un service d’analyse d’image (RodiumAI) fonctionnant avec un modèle d’intelligence artificielle de Google (Gemini). Calbasse ne conserve pas tes photos.',
-      'Ton compte anonyme. Au premier lancement, l’app crée un compte sans nom, sans e-mail et sans numéro de téléphone : seulement un identifiant aléatoire.',
+      'Ton compte. Au premier lancement, l’app crée un compte anonyme : sans nom, sans e-mail, sans numéro de téléphone, seulement un identifiant aléatoire. Si tu choisis « Sauvegarder mon compte », tu y ajoutes ton adresse e-mail (confirmée par un code) : elle sert uniquement à te reconnaître et à t’envoyer ce code.',
       'Tes scans. Pour chaque analyse, nous gardons la date, les aliments reconnus avec leurs quantités et la durée de l’analyse. Cela sert à compter tes scans du jour.',
       'Tes corrections et signalements. Quand tu changes un aliment proposé, ou que tu signales un chiffre qui te semble faux, nous gardons ce que tu as changé pour améliorer la reconnaissance et corriger la base nutritionnelle.',
     ],
   },
   {
     titre: 'Ce qui reste sur ton téléphone',
-    paragraphes: ['Ton prénom, ton âge, ton poids, ta taille, ton objectif, tes repas et ton historique restent sur ton téléphone. Ils ne sont pas envoyés à nos serveurs.'],
+    paragraphes: [
+      'Tant que tu ne sauvegardes pas ton compte, ton prénom, ton âge, ton poids, ta taille, ton objectif, tes repas et ton historique restent sur ton téléphone : ils ne sont pas envoyés à nos serveurs, et si tu perds ton téléphone, ils sont perdus.',
+      'Si tu sauvegardes ton compte avec ton e-mail, ces informations (profil et repas, sans les photos) sont aussi copiées sur nos serveurs, pour que tu les retrouves sur un nouveau téléphone. Ce sont des informations liées à ta santé : elles ne sont utilisées que pour te les rendre, jamais pour te cibler ni être revendues. Tu peux te déconnecter ou tout supprimer à tout moment.',
+    ],
   },
   {
     titre: 'À quoi ça sert',
@@ -53,17 +56,17 @@ export const confidentialite: Section[] = [
   },
   {
     titre: 'Combien de temps',
-    paragraphes: ['Tes scans, corrections et signalements sont gardés tant que ton compte existe. Quand tu supprimes ton compte, ils sont effacés avec lui.'],
+    paragraphes: ['Tes scans, corrections, signalements et ta sauvegarde en ligne sont gardés tant que ton compte existe. Quand tu supprimes ton compte, ils sont effacés avec lui.'],
   },
   {
     titre: 'Tes droits',
     paragraphes: [
-      `Tu peux tout supprimer à tout moment : Profil, puis « Effacer mes données ». Cela supprime ton compte en ligne et les données de ton téléphone. Pour toute autre demande (accès, correction), écris-nous : ${CONTACT}.`,
+      `Tu peux tout supprimer à tout moment : Profil, puis « Effacer mes données ». Cela supprime ton compte en ligne, ta sauvegarde et les données de ton téléphone. Pour toute autre demande (accès, correction), écris-nous : ${CONTACT}.`,
     ],
   },
   {
     titre: 'Sécurité',
-    paragraphes: ['Les échanges entre l’app et le serveur sont chiffrés. Les tables de données sont fermées : seul notre serveur y accède.'],
+    paragraphes: ['Les échanges entre l’app et le serveur sont chiffrés. Les tables de données sont fermées : seul notre serveur y accède. La connexion se fait par un code envoyé à ton e-mail : il n’y a pas de mot de passe à voler.'],
   },
   {
     titre: 'Enfants',

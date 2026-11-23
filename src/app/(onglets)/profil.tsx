@@ -1,4 +1,5 @@
 import { router } from 'expo-router';
+import { useEffect, useState } from 'react';
 import { Alert, Platform, Pressable, View } from 'react-native';
 import { Logo } from '../../components/Graphiques';
 import { Icone, type NomIcone } from '../../components/Icone';
@@ -7,6 +8,8 @@ import { Ecran, Etiquette, TitreSection } from '../../components/ui';
 import { formater } from '../../lib/nutrition.ts';
 import { fonctions } from '../../config';
 import { serveurConfigure, supprimerCompteServeur } from '../../services/api';
+import { supabaseConfigure } from '../../services/supabase';
+import { ecouterMeta, lireMeta, oublierMeta, type MetaCompte } from '../../services/sauvegarde';
 import { supprimerPhoto } from '../../services/photosEnAttente';
 import { modeReconnaissance } from '../../services/reconnaissance';
 import { estPremium, scansRestants, useStore } from '../../state/store';
@@ -32,6 +35,11 @@ function informer(titre: string, message: string) {
 
 export default function Profil() {
   const { etat, dispatch } = useStore();
+  const [meta, setMeta] = useState<MetaCompte | null>(null);
+  useEffect(() => {
+    lireMeta().then(setMeta);
+    return ecouterMeta(setMeta);
+  }, []);
   const p = etat.profil;
   if (!p) return null;
   const premium = estPremium(etat);
@@ -86,6 +94,14 @@ export default function Profil() {
             titre="Clé de reconnaissance"
             texte="Nécessaire pour analyser tes photos, à coller une seule fois"
             onPress={() => router.push('/cle')}
+          />
+        ) : null}
+        {serveurConfigure && supabaseConfigure ? (
+          <Ligne
+            icone="coche"
+            titre={meta ? (meta.statut === 'reconnexion' ? 'Reconnecte-toi' : 'Compte sauvegardé') : 'Sauvegarder mon compte'}
+            texte={meta ? meta.email : 'Avec ton e-mail, retrouve tes données si tu perds ton téléphone'}
+            onPress={() => router.push('/compte')}
           />
         ) : null}
         {serveurConfigure && fonctions.telephone ? (
@@ -147,6 +163,7 @@ export default function Profil() {
                 informer('Suppression impossible', 'Ton compte en ligne n’a pas pu être supprimé. Vérifie ta connexion et réessaie : tes données n’ont pas été effacées.');
                 return;
               }
+              await oublierMeta();
               (etat.scansEnAttente ?? []).forEach((x) => supprimerPhoto(x.photoUri));
               dispatch({ type: 'reinitialiser' });
               router.replace('/onboarding');

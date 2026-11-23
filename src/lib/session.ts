@@ -42,3 +42,29 @@ export function sessionStockee(brut: string | null): Session | null {
 export function adresseApi(urlProjet: string): string {
   return `${urlProjet.trim().replace(/\/+$/, '')}/functions/v1/api`;
 }
+
+export type CodeErreurAuth = 'email_existe' | 'email_invalide' | 'code_invalide' | 'trop_demandes' | 'compte_inconnu' | 'reseau' | 'autre';
+
+/** Traduit une erreur du service d'authentification de Supabase en un message clair pour l'utilisateur. */
+export function erreurAuth(statut: number, donnees: unknown): { code: CodeErreurAuth; message: string } {
+  const d = (donnees && typeof donnees === 'object' ? donnees : {}) as Record<string, unknown>;
+  const code = String(d.error_code ?? d.code ?? '');
+  const texte = String(d.msg ?? d.message ?? d.error_description ?? '').toLowerCase();
+  if (statut === 0) return { code: 'reseau', message: 'Pas de connexion. Réessaie quand le réseau revient.' };
+  if (code === 'email_exists' || code === 'user_already_exists' || code === 'identity_already_exists' || /already (been )?registered|already exists/.test(texte)) {
+    return { code: 'email_existe', message: 'Cet e-mail a déjà un compte Calbasse. Utilise « J’ai déjà un compte » pour t’y connecter.' };
+  }
+  if (code === 'otp_expired' || code === 'invalid_otp' || (/expired|invalid/.test(texte) && /token|otp|code/.test(texte))) {
+    return { code: 'code_invalide', message: 'Code incorrect ou expiré. Vérifie-le ou demande-en un nouveau.' };
+  }
+  if (statut === 429 || code === 'over_email_send_rate_limit' || code === 'over_request_rate_limit' || /rate limit|too many/.test(texte)) {
+    return { code: 'trop_demandes', message: 'Trop de demandes. Attends une minute puis réessaie.' };
+  }
+  if (code === 'otp_disabled' || code === 'user_not_found' || /signups? not allowed|not found/.test(texte)) {
+    return { code: 'compte_inconnu', message: 'Aucun compte Calbasse avec cet e-mail. Vérifie l’adresse.' };
+  }
+  if (code === 'email_address_invalid' || code === 'validation_failed' || /invalid.*email|email.*invalid/.test(texte)) {
+    return { code: 'email_invalide', message: 'Cette adresse e-mail ne semble pas valide.' };
+  }
+  return { code: 'autre', message: 'L’opération a échoué. Réessaie dans un moment.' };
+}

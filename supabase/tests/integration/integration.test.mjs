@@ -155,11 +155,28 @@ test('parcours complet d’un client : gratuit, quota, code, forfait, correction
     assert.equal(faux.sql(`select count(*) from public.signalements where user_id = '${id}'`), '1', 'même signalement le même jour : une seule fois');
   });
 
+  await t.test('sauvegarde en ligne : refusée sans e-mail, puis écriture, relecture, conflit', async () => {
+    assert.equal((await appel('GET', '/sauvegarde', jeton)).statut, 403, 'compte anonyme');
+    faux.emails.set(id, 'awa@example.com');           // l'e-mail vient d'être confirmé
+    assert.deepEqual((await appel('GET', '/sauvegarde', jeton)).corps, { revision: 0, donnees: null, misAJour: null });
+    const w1 = await appel('PUT', '/sauvegarde', jeton, { donnees: { profil: { prenom: 'Awa' }, repas: [{ id: 'r1' }] }, base: 0 });
+    assert.equal(w1.statut, 200, JSON.stringify(w1.corps) + journal);
+    assert.deepEqual(w1.corps, { revision: 1 });
+    const relu = (await appel('GET', '/sauvegarde', jeton)).corps;
+    assert.equal(relu.revision, 1);
+    assert.equal(relu.donnees.profil.prenom, 'Awa');
+    assert.ok(relu.misAJour);
+    const conflit = await appel('PUT', '/sauvegarde', jeton, { donnees: { repas: [] }, base: 0 });
+    assert.equal(conflit.statut, 409);
+    assert.equal(conflit.corps.revision, 1);
+    assert.equal((await appel('PUT', '/sauvegarde', jeton, { donnees: { repas: [] }, base: 1 })).corps.revision, 2);
+  });
+
   await t.test('suppression du compte : tout part avec lui, y compris le forfait', async () => {
     assert.equal(faux.sql(`select count(*) from public.abonnements where user_id = '${id}'`), '1');
     const r = await appel('DELETE', '/compte', jeton);
     assert.equal(r.statut, 200, JSON.stringify(r.corps) + '\n' + journal);
-    for (const table of ['scans', 'corrections', 'signalements', 'abonnements']) {
+    for (const table of ['scans', 'corrections', 'signalements', 'abonnements', 'sauvegardes']) {
       assert.equal(faux.sql(`select count(*) from public.${table} where user_id = '${id}'`), '0', table);
     }
     assert.equal((await appel('GET', '/compte', jeton)).statut, 401, 'le jeton ne marche plus');

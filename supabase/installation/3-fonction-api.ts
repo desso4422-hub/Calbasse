@@ -1535,7 +1535,7 @@ var TAILLE_MAX_CORPS = 9e6;
 var CORS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-client-info",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS"
+  "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS"
 };
 function repondre(statut, corps) {
   return new Response(statut === 204 ? null : JSON.stringify(corps), {
@@ -1609,6 +1609,18 @@ function creerGestionnaire(d) {
         return repondre(200, compteDe(e.restants, e.limite, e.premium));
       }
       if (methode === "POST" && chemin === "/scan") return await scanner(utilisateur.id, req);
+      if (chemin === "/sauvegarde" && (methode === "GET" || methode === "PUT")) {
+        if (!utilisateur.email) return repondre(403, { erreur: "Ajoute ton e-mail pour sauvegarder tes donn\xE9es.", code: "sans_email" });
+        if (methode === "GET") {
+          const s = await depots2.lireSauvegarde(utilisateur.id);
+          return repondre(200, { revision: s.revision, donnees: s.donnees ?? null, misAJour: s.maj_le });
+        }
+        const c = await lireCorps(req);
+        if (!c || !c.donnees || typeof c.donnees !== "object" || Array.isArray(c.donnees) || !Number.isInteger(c.base) || c.base < 0) return repondre(400, { erreur: "Requ\xEAte illisible." });
+        if (JSON.stringify(c.donnees).length > 25e5) return repondre(413, { erreur: "Sauvegarde trop volumineuse." });
+        const r = await depots2.ecrireSauvegarde(utilisateur.id, c.donnees, c.base);
+        return r.statut === "ok" ? repondre(200, { revision: r.revision }) : repondre(409, { erreur: "Un autre t\xE9l\xE9phone a sauvegard\xE9 entre-temps.", code: "conflit", revision: r.revision });
+      }
       if (methode === "POST" && chemin === "/corrections") {
         const c = await lireCorps(req);
         if (!c || typeof c.scanId !== "string" || !Array.isArray(c.proposees) || !Array.isArray(c.finales)) return repondre(400, { erreur: "Requ\xEAte illisible." });
@@ -1755,7 +1767,13 @@ function verifier(r) {
 var depots = {
   async utilisateur(jeton) {
     const { data, error } = await supabase.auth.getUser(jeton);
-    return error || !data.user ? null : { id: data.user.id };
+    return error || !data.user ? null : { id: data.user.id, email: data.user.email || null };
+  },
+  async lireSauvegarde(id) {
+    return verifier(await supabase.rpc("lire_sauvegarde", { p_user: id }));
+  },
+  async ecrireSauvegarde(id, donnees, base) {
+    return verifier(await supabase.rpc("ecrire_sauvegarde", { p_user: id, p_donnees: donnees, p_base: base }));
   },
   async reserverScan(id, cle, gratuit, premium, budget, parMinute) {
     return verifier(await supabase.rpc("reserver_scan", { p_user: id, p_cle: cle, p_gratuit: gratuit, p_premium: premium, p_budget: budget, p_par_minute: parMinute }));

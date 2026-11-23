@@ -39,9 +39,17 @@ type Options = {
 function fauxDepots(opts: Options = {}) {
   const appels: Appels = { reserver: [], terminer: [], echouer: [], corrections: [], signalements: [], supprimes: [], codes: [], paiementsCrees: [], valides: [], refuses: [] };
   const paiements = { ...(opts.paiements ?? {}) };
+  const sauvegardes = new Map<string, { revision: number; donnees: unknown }>();
   const depots: Depots = {
     async utilisateur(jeton) {
-      return jeton === 'jeton-valide' ? { id: 'u1' } : jeton === 'jeton-autre' ? { id: 'u2' } : null;
+      return jeton === 'jeton-valide' ? { id: 'u1' } : jeton === 'jeton-autre' ? { id: 'u2' } : jeton === 'jeton-email' ? { id: 'u3', email: 'a@b.com' } : null;
+    },
+    async lireSauvegarde(id) { const s = sauvegardes.get(id); return s ? { revision: s.revision, donnees: s.donnees, maj_le: '2026-11-24T10:00:00Z' } : { revision: 0, donnees: null, maj_le: null }; },
+    async ecrireSauvegarde(id, donnees, base) {
+      const s = sauvegardes.get(id) ?? { revision: 0, donnees: null };
+      if (s.revision !== base) return { statut: 'conflit', revision: s.revision };
+      sauvegardes.set(id, { revision: s.revision + 1, donnees });
+      return { statut: 'ok', revision: s.revision + 1 };
     },
     async reserverScan(...a) {
       appels.reserver.push(a);
@@ -254,6 +262,42 @@ test('suppression du compte', async () => {
   const r = await appeler('DELETE', '/compte');
   assert.equal(r.status, 200);
   assert.deepEqual(appels.supprimes, ['u1']);
+});
+
+test('sauvegarde : réservée aux comptes avec e-mail', async () => {
+  const { appeler } = appli();
+  for (const m of ['GET', 'PUT']) {
+    const r = await appeler(m, '/sauvegarde', m === 'PUT' ? { donnees: {}, base: 0 } : undefined);
+    assert.equal(r.status, 403);
+    assert.equal((await r.json()).code, 'sans_email');
+  }
+  assert.equal((await appeler('GET', '/sauvegarde', undefined, null)).status, 401);
+});
+
+test('sauvegarde : écriture, relecture, conflit si un autre téléphone est passé avant', async () => {
+  const { appeler } = appli();
+  const vide = await (await appeler('GET', '/sauvegarde', undefined, 'jeton-email')).json();
+  assert.deepEqual(vide, { revision: 0, donnees: null, misAJour: null });
+  const ecrit = await appeler('PUT', '/sauvegarde', { donnees: { profil: { prenom: 'Awa' }, repas: [] }, base: 0 }, 'jeton-email');
+  assert.equal(ecrit.status, 200);
+  assert.deepEqual(await ecrit.json(), { revision: 1 });
+  const relu = await (await appeler('GET', '/sauvegarde', undefined, 'jeton-email')).json();
+  assert.equal(relu.revision, 1);
+  assert.equal(relu.donnees.profil.prenom, 'Awa');
+  const conflit = await appeler('PUT', '/sauvegarde', { donnees: { repas: [] }, base: 0 }, 'jeton-email');
+  assert.equal(conflit.status, 409);
+  const c = await conflit.json();
+  assert.equal(c.code, 'conflit');
+  assert.equal(c.revision, 1);
+});
+
+test('sauvegarde : requêtes invalides ou trop grosses refusées', async () => {
+  const { appeler } = appli();
+  for (const corps of [{}, { donnees: [], base: 0 }, { donnees: {}, base: -1 }, { donnees: {}, base: 'x' }, { donnees: 'texte', base: 0 }]) {
+    assert.equal((await appeler('PUT', '/sauvegarde', corps, 'jeton-email')).status, 400, JSON.stringify(corps));
+  }
+  const grosse = await appeler('PUT', '/sauvegarde', { donnees: { repas: 'x'.repeat(2_600_000) }, base: 0 }, 'jeton-email');
+  assert.equal(grosse.status, 413);
 });
 
 test('CORS et routes inconnues', async () => {

@@ -14,6 +14,7 @@ import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { BrouillonProvider } from '../state/brouillon';
 import { StoreProvider, useStore } from '../state/store';
 import { useFileScans } from '../state/fileScans';
+import { useSauvegarde } from '../state/sauvegarde';
 import { useSynchroCompte } from '../state/synchro';
 import { couleurs } from '../theme';
 
@@ -22,6 +23,7 @@ SplashScreen.preventAutoHideAsync().catch(() => {});
 function Navigation() {
   const { pret } = useStore();
   useSynchroCompte();
+  useSauvegarde();
   useFileScans();
   const [policesChargees] = useFonts({
     PlusJakartaSans_400Regular,
@@ -51,6 +53,7 @@ function Navigation() {
         <Stack.Screen name="choisir" options={{ presentation: 'modal' }} />
         <Stack.Screen name="premium" options={{ presentation: 'modal' }} />
         <Stack.Screen name="telephone" options={{ presentation: 'modal' }} />
+        <Stack.Screen name="compte" options={{ presentation: 'modal' }} />
         <Stack.Screen name="cle" options={{ presentation: 'modal' }} />
         <Stack.Screen name="confidentialite" options={{ presentation: 'modal' }} />
         <Stack.Screen name="coach/index" />

@@ -26,6 +26,10 @@ const signalements: { user: string; alimentId: string }[] = [];
 const abonnements = new Map<string, { plan: 'mensuel' | 'annuel'; fin: number }>();
 const codes = new Map<string, { plan: 'mensuel' | 'annuel'; jours: number; utilisePar?: string }>();
 const paiements = new Map<string, Paiement>();
+const emailDe = new Map<string, string>();         // utilisateur → e-mail confirmé
+const liaisons = new Map<string, string>();        // e-mail en attente de confirmation → utilisateur
+const sauvegardes = new Map<string, { revision: number; donnees: unknown; maj: string }>();
+const CODE_EMAIL = '123456';                       // le « code reçu par e-mail » du faux Supabase
 const essais = new Map<string, number>();
 
 const forfait = (id: string): Premium => {
@@ -43,7 +47,17 @@ const compte = (s: Scan) => s.statut === 'ok' || (s.statut === 'en_cours' && Dat
 const depots: Depots = {
   async utilisateur(jeton) {
     const id = jetons.get(jeton);
-    return id && utilisateurs.has(id) ? { id } : null;
+    return id && utilisateurs.has(id) ? { id, email: emailDe.get(id) ?? null } : null;
+  },
+  async lireSauvegarde(id) {
+    const s = sauvegardes.get(id);
+    return s ? { revision: s.revision, donnees: s.donnees, maj_le: s.maj } : { revision: 0, donnees: null, maj_le: null };
+  },
+  async ecrireSauvegarde(id, donnees, base) {
+    const rev = sauvegardes.get(id)?.revision ?? 0;
+    if (rev !== base) return { statut: 'conflit', revision: rev };
+    sauvegardes.set(id, { revision: rev + 1, donnees, maj: new Date().toISOString() });
+    return { statut: 'ok', revision: rev + 1 };
   },
   async reserverScan(id, cle, gratuit, premium, budget, parMinute): Promise<Reservation> {
     const jour = jourLagos();
@@ -106,6 +120,8 @@ const depots: Depots = {
   },
   async supprimerCompte(id) {
     utilisateurs.delete(id);
+    emailDe.delete(id);
+    sauvegardes.delete(id);
     for (let i = scans.length - 1; i >= 0; i--) if (scans[i].user === id) scans.splice(i, 1);
     console.log(`  → compte ${id.slice(0, 8)} supprimé avec ses données`);
   },
@@ -137,7 +153,7 @@ const api = creerGestionnaire({
   },
 });
 
-const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS' };
+const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS' };
 async function corps(req: IncomingMessage): Promise<Buffer> {
   const morceaux: Buffer[] = [];
   for await (const m of req) morceaux.push(m as Buffer);
@@ -168,6 +184,43 @@ createServer(async (req, res) => {
     jetons.set(acces, id);
     return ecrire(200, { access_token: acces, refresh_token: `refresh-${id}`, expires_in: 3600 });
   }
+  // Compte avec e-mail : même protocole que Supabase (code à 6 chiffres, toujours 123456 ici)
+  const session = (id: string) => {
+    const acces = `acces-${id}-${Date.now()}`, rafraichir = `refresh-${id}`;
+    jetons.set(acces, id); refresh.set(rafraichir, id);
+    return { access_token: acces, refresh_token: rafraichir, expires_in: 3600, token_type: 'bearer', user: { id, email: emailDe.get(id) } };
+  };
+  if (url.pathname === '/auth/v1/user' && req.method === 'PUT') {
+    const id = jetons.get((req.headers.authorization ?? '').replace(/^Bearer /, ''));
+    const email = String(JSON.parse(donnees.toString() || '{}').email ?? '').toLowerCase();
+    if (!id) return ecrire(401, { code: 401, msg: 'invalid JWT' });
+    if ([...emailDe.values()].includes(email)) return ecrire(422, { error_code: 'email_exists', msg: 'A user with this email address has already been registered' });
+    liaisons.set(email, id);
+    console.log(`  → e-mail à ${email} : code ${CODE_EMAIL}`);
+    return ecrire(200, { id, new_email: email });
+  }
+  if (url.pathname === '/auth/v1/otp' && req.method === 'POST') {
+    const email = String(JSON.parse(donnees.toString() || '{}').email ?? '').toLowerCase();
+    if (![...emailDe.values()].includes(email)) return ecrire(422, { error_code: 'otp_disabled', msg: 'Signups not allowed for otp' });
+    console.log(`  → e-mail à ${email} : code ${CODE_EMAIL}`);
+    return ecrire(200, {});
+  }
+  if (url.pathname === '/auth/v1/verify' && req.method === 'POST') {
+    const { type, email: brut, token } = JSON.parse(donnees.toString() || '{}');
+    const email = String(brut ?? '').toLowerCase();
+    if (token !== CODE_EMAIL) return ecrire(403, { error_code: 'otp_expired', msg: 'Token has expired or is invalid' });
+    if (type === 'email_change' && liaisons.has(email)) {
+      const id = liaisons.get(email)!;
+      liaisons.delete(email);
+      emailDe.set(id, email);
+      return ecrire(200, session(id));
+    }
+    if (type === 'email') {
+      const id = [...emailDe].find(([, e]) => e === email)?.[0];
+      if (id) return ecrire(200, session(id));
+    }
+    return ecrire(403, { error_code: 'otp_expired', msg: 'Token has expired or is invalid' });
+  }
   if (url.pathname.startsWith('/functions/v1/api')) {
     const headers = new Headers();
     for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string') headers.set(k, v);
@@ -182,6 +235,6 @@ createServer(async (req, res) => {
     codes.set(code, { plan: 'mensuel', jours: 30 });
     return ecrire(200, { code });
   }
-  if (url.pathname === '/__etat') return ecrire(200, { utilisateurs: utilisateurs.size, scans: scans.length, corrections, signalements, abonnes: [...abonnements.keys()].length });
+  if (url.pathname === '/__etat') return ecrire(200, { utilisateurs: utilisateurs.size, scans: scans.length, corrections, signalements, abonnes: [...abonnements.keys()].length, sauvegardes: [...sauvegardes.values()].map((x) => x.donnees), emails: [...emailDe.values()] });
   return ecrire(404, { erreur: 'inconnu' });
 }).listen(PORT, '127.0.0.1', () => console.log(`Faux Supabase prêt sur http://127.0.0.1:${PORT} (${cleApi ? 'vraie reconnaissance' : 'résultat de démonstration'}, ${GRATUITS} gratuit / ${PREMIUM} premium par jour)`));

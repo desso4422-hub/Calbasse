@@ -57,7 +57,13 @@ function verifier<T>(r: { data: T; error: { message: string } | null }): T {
 const depots: Depots = {
   async utilisateur(jeton) {
     const { data, error } = await supabase.auth.getUser(jeton);
-    return error || !data.user ? null : { id: data.user.id };
+    return error || !data.user ? null : { id: data.user.id, email: data.user.email || null };
+  },
+  async lireSauvegarde(id) {
+    return verifier(await supabase.rpc('lire_sauvegarde', { p_user: id })) as { revision: number; donnees: unknown; maj_le: string | null };
+  },
+  async ecrireSauvegarde(id, donnees, base) {
+    return verifier(await supabase.rpc('ecrire_sauvegarde', { p_user: id, p_donnees: donnees, p_base: base })) as { statut: 'ok' | 'conflit'; revision: number };
   },
   async reserverScan(id, cle, gratuit, premium, budget, parMinute) {
     return verifier(await supabase.rpc('reserver_scan', { p_user: id, p_cle: cle, p_gratuit: gratuit, p_premium: premium, p_budget: budget, p_par_minute: parMinute })) as Reservation;

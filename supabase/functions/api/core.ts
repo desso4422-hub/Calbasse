@@ -12,6 +12,8 @@
  *   POST   /paiements        🔒   { plan } → { transactionId, urlPaiement } (CinetPay)
  *   GET    /paiements/:id    🔒   statut du paiement (revérifié auprès de CinetPay)
  *   DELETE /compte           🔒   supprime le compte et toutes ses données
+ *   GET    /sauvegarde       🔒   profil et repas sauvegardés en ligne (comptes avec e-mail seulement)
+ *   PUT    /sauvegarde       🔒   { donnees, base } → { revision } ; 409 si un autre téléphone est passé avant
  *   POST   /cinetpay/notification   appelée par CinetPay (notify_url), sans connexion
  *   GET    /cinetpay/retour         redirige vers l'app après le paiement (return_url)
  *
@@ -43,7 +45,9 @@ export type Paiement = { id: string; user_id: string; plan: Plan; montant: numbe
 
 export type Depots = {
   /** Le compte à qui appartient ce jeton, ou null s'il est invalide ou expiré */
-  utilisateur(jeton: string): Promise<{ id: string } | null>;
+  utilisateur(jeton: string): Promise<{ id: string; email?: string | null } | null>;
+  lireSauvegarde(id: string): Promise<{ revision: number; donnees: unknown; maj_le: string | null }>;
+  ecrireSauvegarde(id: string, donnees: unknown, base: number): Promise<{ statut: 'ok' | 'conflit'; revision: number }>;
   /** La limite du jour dépend du forfait de l'utilisateur : gratuit ou premium */
   reserverScan(id: string, cle: string, gratuit: number, premium: number, budget: number, parMinute: number): Promise<Reservation>;
   terminerScan(scanId: string, p: { resultat: unknown; modele: string; dureeMs: number; usage: unknown; compte: boolean }): Promise<void>;
@@ -83,7 +87,7 @@ const TAILLE_MAX_CORPS = 9_000_000;
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, apikey, content-type, x-client-info',
-  'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS',
+  'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
 };
 
 function repondre(statut: number, corps: unknown): Response {
@@ -171,6 +175,20 @@ export function creerGestionnaire(d: { depots: Depots; vision: Vision; config: C
       }
 
       if (methode === 'POST' && chemin === '/scan') return await scanner(utilisateur.id, req);
+
+      if (chemin === '/sauvegarde' && (methode === 'GET' || methode === 'PUT')) {
+        // Une sauvegarde n'a de sens que si on peut la retrouver : il faut un e-mail confirmé
+        if (!utilisateur.email) return repondre(403, { erreur: 'Ajoute ton e-mail pour sauvegarder tes données.', code: 'sans_email' });
+        if (methode === 'GET') {
+          const s = await depots.lireSauvegarde(utilisateur.id);
+          return repondre(200, { revision: s.revision, donnees: s.donnees ?? null, misAJour: s.maj_le });
+        }
+        const c = await lireCorps(req);
+        if (!c || !c.donnees || typeof c.donnees !== 'object' || Array.isArray(c.donnees) || !Number.isInteger(c.base) || (c.base as number) < 0) return repondre(400, { erreur: 'Requête illisible.' });
+        if (JSON.stringify(c.donnees).length > 2_500_000) return repondre(413, { erreur: 'Sauvegarde trop volumineuse.' });
+        const r = await depots.ecrireSauvegarde(utilisateur.id, c.donnees, c.base as number);
+        return r.statut === 'ok' ? repondre(200, { revision: r.revision }) : repondre(409, { erreur: 'Un autre téléphone a sauvegardé entre-temps.', code: 'conflit', revision: r.revision });
+      }
 
       if (methode === 'POST' && chemin === '/corrections') {
         const c = await lireCorps(req);

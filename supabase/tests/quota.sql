@@ -261,4 +261,35 @@ do $$ begin
 end $$;
 reset role;
 
+-- ——— Sauvegarde en ligne ———
+do $$
+declare u uuid := gen_random_uuid(); r jsonb;
+begin
+  insert into auth.users (id) values (u);
+  r := public.lire_sauvegarde(u);
+  if (r->>'revision')::int <> 0 or r->'donnees' <> 'null'::jsonb then raise exception 'sauvegarde vide attendue: %', r; end if;
+  r := public.ecrire_sauvegarde(u, '{"a":1}', 0);
+  if r->>'statut' <> 'ok' or (r->>'revision')::int <> 1 then raise exception 'première écriture: %', r; end if;
+  r := public.ecrire_sauvegarde(u, '{"a":2}', 0);
+  if r->>'statut' <> 'conflit' or (r->>'revision')::int <> 1 then raise exception 'conflit attendu: %', r; end if;
+  r := public.ecrire_sauvegarde(u, '{"a":2}', 1);
+  if r->>'statut' <> 'ok' or (r->>'revision')::int <> 2 then raise exception 'seconde écriture: %', r; end if;
+  if (public.lire_sauvegarde(u)->'donnees'->>'a') <> '2' then raise exception 'relecture'; end if;
+  begin perform public.ecrire_sauvegarde(u, to_jsonb(repeat('x', 3100000)), 2); raise exception 'sauvegarde trop grosse acceptée'; exception when check_violation then null; end;
+  delete from auth.users where id = u;
+  if (select count(*) from public.sauvegardes where user_id = u) <> 0 then raise exception 'la sauvegarde doit partir avec le compte'; end if;
+end $$;
+
+set role anon;
+do $$ begin
+  begin perform count(*) from public.sauvegardes; raise exception 'anon a pu lire les sauvegardes'; exception when insufficient_privilege then null; end;
+  begin perform public.lire_sauvegarde(gen_random_uuid()); raise exception 'anon a pu lire une sauvegarde'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+set role authenticated;
+do $$ begin
+  begin perform public.ecrire_sauvegarde(gen_random_uuid(), '{}', 0); raise exception 'authenticated a pu écrire une sauvegarde'; exception when insufficient_privilege then null; end;
+end $$;
+reset role;
+
 select 'TOUS LES TESTS DE LA BASE PASSENT' as resultat;

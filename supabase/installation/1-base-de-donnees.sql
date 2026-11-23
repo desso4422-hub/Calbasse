@@ -1,6 +1,6 @@
--- Calbasse : base de données. À coller en entier dans Supabase → SQL Editor → New query, puis Run.
+-- Calbasse : base de donnees. À coller en entier dans Supabase → SQL Editor → New query, puis Run.
 -- Résultat attendu : « Success. No rows returned ».
--- FICHIER GÉNÉRÉ depuis supabase/migrations/ : ne pas modifier ici (npm run installation).
+-- FICHIER GÉNÉRÉ depuis supabase/migrations/20261123000000_init.sql : ne pas modifier ici (npm run installation).
 
 -- Calbasse : base de données du MVP.
 --

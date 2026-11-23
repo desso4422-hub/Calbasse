@@ -1,5 +1,6 @@
 /**
- * État de l'app, gardé sur le téléphone (AsyncStorage). Pas de compte ni de serveur pour l'instant.
+ * État de l'app, gardé sur le téléphone (AsyncStorage). Le profil et les repas peuvent aussi être sauvegardés en ligne
+ * (compte avec e-mail : services/sauvegarde.ts).
  */
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createContext, useContext, useEffect, useMemo, useReducer, useState, type ReactNode } from 'react';
@@ -114,6 +115,7 @@ type Action =
   | { type: 'ajouterScanAttente'; scan: ScanEnAttente }
   | { type: 'majScanAttente'; cle: string; maj: Partial<ScanEnAttente> }
   | { type: 'retirerScanAttente'; cle: string }
+  | { type: 'restaurer'; profil: Profil | null; repas: Repas[] }
   | { type: 'chargerDemo' }
   | { type: 'reinitialiser' };
 
@@ -178,6 +180,16 @@ function reducteur(etat: Etat, action: Action): Etat {
       return { ...etat, scansEnAttente: (etat.scansEnAttente ?? []).map((x) => (x.cle === action.cle ? { ...x, ...action.maj } : x)) };
     case 'retirerScanAttente':
       return { ...etat, scansEnAttente: (etat.scansEnAttente ?? []).filter((x) => x.cle !== action.cle) };
+    case 'restaurer': {
+      // Les photos ne sont pas sauvegardées en ligne : on garde celles de ce téléphone
+      const photos = new Map(etat.repas.filter((r) => r.photoUri).map((r) => [r.id, r.photoUri]));
+      const demo = etat.repas.filter((r) => r.id.startsWith('demo-'));
+      return {
+        ...etat,
+        profil: action.profil ?? etat.profil,
+        repas: [...demo, ...action.repas.map((r) => (photos.has(r.id) ? { ...r, photoUri: photos.get(r.id) } : r))],
+      };
+    }
     case 'chargerDemo':
       return { ...etat, repas: [...etat.repas.filter((r) => !r.id.startsWith('demo-')), ...repasDemo(new Date())] };
     case 'reinitialiser':

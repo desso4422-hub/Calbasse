@@ -22,6 +22,8 @@ export function demarrerFauxSupabase({ base, port = 0, reponseModele }) {
   const cols = (o) => Object.keys(o).map((k) => `"${k}"`).join(', ');
   const vals = (o) => Object.values(o).map(lit).join(', ');
   const appels = [];
+  /** Adresses e-mail confirmées, par compte (le test les pose, comme le ferait une vraie confirmation) */
+  const emails = new Map();
 
   const serveur = createServer(async (req, res) => {
     const morceaux = [];
@@ -45,7 +47,7 @@ export function demarrerFauxSupabase({ base, port = 0, reponseModele }) {
       if (url.pathname === '/auth/v1/user' && req.method === 'GET') {
         const id = jeton.startsWith('tok-') ? jeton.slice(4) : '';
         const existe = /^[0-9a-f-]{36}$/.test(id) && sql(`select count(*) from auth.users where id = '${id}'`) === '1';
-        return existe ? rep(200, { id, aud: 'authenticated', role: 'authenticated', is_anonymous: true }) : rep(401, { code: 401, msg: 'invalid JWT' });
+        return existe ? rep(200, { id, aud: 'authenticated', role: 'authenticated', is_anonymous: !emails.has(id), email: emails.get(id) ?? '' }) : rep(401, { code: 401, msg: 'invalid JWT' });
       }
       const suppression = /^\/auth\/v1\/admin\/users\/([0-9a-f-]{36})$/.exec(url.pathname);
       // La bibliothèque lit l'utilisateur avant de le supprimer
@@ -99,6 +101,6 @@ export function demarrerFauxSupabase({ base, port = 0, reponseModele }) {
   });
 
   return new Promise((resoudre) =>
-    serveur.listen(port, '127.0.0.1', () => resoudre({ port: serveur.address().port, appels, sql, fermer: () => serveur.close() })),
+    serveur.listen(port, '127.0.0.1', () => resoudre({ port: serveur.address().port, appels, sql, emails, fermer: () => serveur.close() })),
   );
 }

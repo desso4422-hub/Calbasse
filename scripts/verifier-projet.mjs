@@ -64,6 +64,12 @@ if (jeton) {
   const code = await appel('POST', '/codes', jeton, { code: 'CAL-0000-0000-0000' });
   code.statut === 400 && code.corps?.code === 'invalide' ? ok('Un faux code d’activation est refusé') : ko(`Faux code : statut ${code.statut} ${JSON.stringify(code.corps)}`);
 
+  // Sauvegarde en ligne : refusée tant que le compte n'a pas d'e-mail
+  const sauv = await appel('GET', '/sauvegarde', jeton);
+  sauv.statut === 403 && sauv.corps?.code === 'sans_email'
+    ? ok('La sauvegarde en ligne est installée (réservée aux comptes avec e-mail)')
+    : ko(`Sauvegarde : statut ${sauv.statut} ${JSON.stringify(sauv.corps)}`, sauv.statut === 404 || sauv.statut === 400 || sauv.statut === 500 ? 'Colle le fichier 2-sauvegarde-des-donnees.sql dans SQL Editor, puis redéploie la fonction avec 3-fonction-api.ts' : undefined);
+
   // 4. Vrai scan (facultatif)
   if (photo) {
     if (!existsSync(photo)) ko(`Photo introuvable : ${photo}`);
