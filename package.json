@@ -50,7 +50,10 @@
     "test:supabase": "node --test --experimental-strip-types supabase/functions/api/*.test.ts",
     "mentions": "node --experimental-strip-types scripts/mentions-markdown.mjs",
     "verifier:production": "node scripts/verifier-production.mjs",
-    "eas-build-pre-install": "node scripts/verifier-production.mjs"
+    "eas-build-pre-install": "node scripts/verifier-production.mjs",
+    "test:integration": "node --test supabase/tests/integration/*.test.mjs",
+    "installation": "node scripts/preparer-installation.mjs",
+    "verifier:projet": "node scripts/verifier-projet.mjs"
   },
   "private": true
 }
