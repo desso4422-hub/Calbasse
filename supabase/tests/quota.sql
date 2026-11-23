@@ -201,7 +201,7 @@ declare
   u uuid := pg_temp.nouveau_user();
   id text; p jsonb;
 begin
-  id := public.creer_paiement(u, 'annuel', 20000);
+  id := public.creer_paiement(u, 'annuel', 12000);
   assert id ~ '^CAL[A-F0-9]{18}$', 'identifiant de transaction: ' || id;
   assert public.lire_paiement(id)->>'statut' = 'en_attente';
   p := public.valider_paiement(id, 365);
@@ -210,7 +210,7 @@ begin
   perform public.valider_paiement(id, 365);
   assert (select jusqu_au from public.abonnements where user_id = u) < now() + interval '366 days', 'une seule prolongation';
   -- Un paiement refusé ne donne rien, et un paiement accepté ne peut plus être refusé
-  id := public.creer_paiement(u, 'mensuel', 2000);
+  id := public.creer_paiement(u, 'mensuel', 1500);
   perform public.refuser_paiement(id);
   assert public.lire_paiement(id)->>'statut' = 'refuse';
   perform public.valider_paiement(id, 30);
@@ -222,7 +222,7 @@ do $$
 declare u uuid := pg_temp.nouveau_user();
 begin
   perform public.activer_abonnement(u, 'mensuel', 30, 'manuel');
-  perform public.creer_paiement(u, 'mensuel', 2000);
+  perform public.creer_paiement(u, 'mensuel', 1500);
   delete from auth.users where id = u;
   assert not exists (select from public.abonnements where user_id = u) and not exists (select from public.paiements where user_id = u), 'cascade forfait et paiements';
 end $$;

@@ -13,8 +13,8 @@ import type { Abonnement } from '../state/store';
 import { appelApi, ErreurApi, serveurConfigure, type EtatCompteServeur } from './api';
 
 export const tarifs = {
-  mensuel: { prix: 2000, jours: 30 },
-  annuel: { prix: 20000, jours: 365 },
+  mensuel: { prix: 1500, jours: 30 },
+  annuel: { prix: 12000, jours: 365 },
 } as const;
 
 export const modePaiement: 'serveur' | 'demo' = serveurConfigure ? 'serveur' : 'demo';

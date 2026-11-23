@@ -78,7 +78,7 @@ const config = {
   premium: 10,
   budget: 300,
   parMinute: 6,
-  tarifs: { mensuel: { montant: 2000, jours: 30 }, annuel: { montant: 20000, jours: 365 } },
+  tarifs: { mensuel: { montant: 1500, jours: 30 }, annuel: { montant: 12000, jours: 365 } },
   cinetpay: null as ConfigCinetPay | null,
 };
 const cinetpay: ConfigCinetPay = { apiKey: 'cle-cinetpay', siteId: '123', urlApi: 'https://api-checkout.cinetpay.exemple/v2', urlPublique: 'https://x.supabase.co/functions/v1/api' };
@@ -314,8 +314,8 @@ test('paiement : la transaction est créée au prix du forfait et l’adresse de
   const r = await appeler('POST', '/paiements', { plan: 'annuel' });
   assert.equal(r.status, 201);
   assert.deepEqual(await r.json(), { transactionId: 'CAL0000000000000001', urlPaiement: 'https://checkout.cinetpay.exemple/pay/abc' });
-  assert.deepEqual(appels.paiementsCrees[0], ['u1', 'annuel', 20000]);
-  assert.equal(f.appels[0].corps.amount, 20000);
+  assert.deepEqual(appels.paiementsCrees[0], ['u1', 'annuel', 12000]);
+  assert.equal(f.appels[0].corps.amount, 12000);
   assert.equal(f.appels[0].corps.notify_url, 'https://x.supabase.co/functions/v1/api/cinetpay/notification');
   assert.equal(f.appels[0].corps.metadata, 'u1');
 });
@@ -333,10 +333,10 @@ test('paiement : indisponible sans CinetPay, formule inconnue, ou refus de Cinet
   assert.deepEqual(refus.appels.refuses, ['CAL0000000000000001'], 'la transaction est annulée, pas laissée en attente');
 });
 
-const enAttente = (extra: Partial<Paiement> = {}): Options => ({ paiements: { CAL0000000000000001: { id: 'CAL0000000000000001', user_id: 'u1', plan: 'mensuel', montant: 2000, statut: 'en_attente', ...extra } } });
+const enAttente = (extra: Partial<Paiement> = {}): Options => ({ paiements: { CAL0000000000000001: { id: 'CAL0000000000000001', user_id: 'u1', plan: 'mensuel', montant: 1500, statut: 'en_attente', ...extra } } });
 
 test('paiement : accepté chez CinetPay, le forfait est activé et le compte renvoyé', async () => {
-  const { appeler, appels } = appli(enAttente(), visionOk, { http: cinetpayRepond(verif('ACCEPTED', 2000)).http });
+  const { appeler, appels } = appli(enAttente(), visionOk, { http: cinetpayRepond(verif('ACCEPTED', 1500)).http });
   const r = await appeler('GET', '/paiements/CAL0000000000000001');
   const j = await r.json();
   assert.equal(j.statut, 'accepte');
@@ -345,7 +345,7 @@ test('paiement : accepté chez CinetPay, le forfait est activé et le compte ren
 });
 
 test('paiement : on ne croit pas le montant ni la devise annoncés par erreur', async () => {
-  for (const [montant, devise] of [[500, 'XOF'], [2000, 'USD']] as const) {
+  for (const [montant, devise] of [[500, 'XOF'], [1500, 'USD']] as const) {
     const { appeler, appels } = appli(enAttente(), visionOk, { http: cinetpayRepond(verif('ACCEPTED', montant, devise)).http });
     const j = await (await appeler('GET', '/paiements/CAL0000000000000001')).json();
     assert.equal(j.statut, 'en_attente', `${montant} ${devise}`);
@@ -368,7 +368,7 @@ test('paiement : on ne voit que ses propres paiements', async () => {
 });
 
 test('notification de CinetPay : sert de signal, le statut est revérifié ; JSON ou formulaire', async () => {
-  const f = cinetpayRepond(verif('ACCEPTED', 2000));
+  const f = cinetpayRepond(verif('ACCEPTED', 1500));
   const { depots, appels } = fauxDepots(enAttente());
   const gerer = creerGestionnaire({ depots, vision: visionOk, config: { ...config, cinetpay }, http: f.http });
   const r = await gerer(new Request('https://x.co/functions/v1/api/cinetpay/notification', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'cpm_trans_id=CAL0000000000000001&cpm_site_id=123' }));
@@ -377,7 +377,7 @@ test('notification de CinetPay : sert de signal, le statut est revérifié ; JSO
   assert.equal(appels.valides.length, 1);
 
   // Une fausse notification pour une transaction inconnue ne fait rien
-  const f2 = cinetpayRepond(verif('ACCEPTED', 2000));
+  const f2 = cinetpayRepond(verif('ACCEPTED', 1500));
   const g2 = creerGestionnaire({ depots: fauxDepots().depots, vision: visionOk, config: { ...config, cinetpay }, http: f2.http });
   const r2 = await g2(new Request('https://x.co/api/cinetpay/notification', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cpm_trans_id: 'CAL1111111111111111' }) }));
   assert.equal(r2.status, 200);

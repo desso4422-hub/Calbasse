@@ -79,6 +79,7 @@ export default function Premium() {
   const scansPremium = offre?.scansPremium ?? SCANS_PREMIUM;
   const avantages = avantagesDe(scansPremium);
   const parMois = Math.round(tarifs.annuel.prix / 12);
+  const moisOfferts = Math.round(12 - tarifs.annuel.prix / tarifs.mensuel.prix);
   // Paiement en ligne si le serveur l'a configuré ; sinon : Mobile Money par WhatsApp, puis un code
   const paiementEnLigne = modePaiement === 'demo' || !!offre?.paiement;
   const lienPaiement = lienWhatsApp(CONTACT, `Bonjour, je veux le forfait Calbasse ${plan === 'annuel' ? 'annuel' : 'mensuel'} (${formater(tarifs[plan].prix)} FCFA).`);
@@ -259,11 +260,13 @@ export default function Premium() {
             <T g={800} taille={16}>
               Annuel
             </T>
-            <View style={{ backgroundColor: couleurs.feuille, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9 }}>
-              <T g={700} taille={11} couleur={couleurs.blanc}>
-                2 mois offerts
-              </T>
-            </View>
+            {moisOfferts >= 1 ? (
+              <View style={{ backgroundColor: couleurs.feuille, borderRadius: 999, paddingVertical: 3, paddingHorizontal: 9 }}>
+                <T g={700} taille={11} couleur={couleurs.blanc}>
+                  {moisOfferts} mois offerts
+                </T>
+              </View>
+            ) : null}
           </View>
           <T taille={12} couleur={couleurs.encre2}>
             Soit environ {formater(parMois)} FCFA par mois

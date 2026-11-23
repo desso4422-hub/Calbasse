@@ -16,8 +16,8 @@ export const SCANS_PREMIUM = 30;
 export type Plan = 'mensuel' | 'annuel';
 
 export const TARIFS: Record<Plan, { montant: number; jours: number }> = {
-  mensuel: { montant: 2000, jours: 30 },
-  annuel: { montant: 20000, jours: 365 },
+  mensuel: { montant: 1500, jours: 30 },
+  annuel: { montant: 12000, jours: 365 },
 };
 
 export type Compte = { id: string; premiumJusquau: string | null; plan: Plan | null; telephone: string | null };

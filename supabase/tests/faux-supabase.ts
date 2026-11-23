@@ -133,7 +133,7 @@ const api = creerGestionnaire({
   vision,
   config: {
     modele: 'faux', gratuit: GRATUITS, premium: PREMIUM, budget: 300, parMinute: 6, cinetpay: null,
-    tarifs: { mensuel: { montant: 2000, jours: 30 }, annuel: { montant: 20000, jours: 365 } },
+    tarifs: { mensuel: { montant: 1500, jours: 30 }, annuel: { montant: 12000, jours: 365 } },
   },
 });
 

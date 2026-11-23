@@ -41,7 +41,7 @@ Téléphone ──photo──▶ Supabase (fonction « api » + base de données
 ## Étape 3 : tes décisions
 
 - **Ton contact** : une adresse e-mail ou un **numéro WhatsApp** (de préférence : l'app y envoie les clients qui veulent payer). Il apparaît aussi dans la politique de confidentialité, c'est obligatoire.
-- **Les prix** : par défaut **2 000 FCFA par mois** (30 jours) et **20 000 FCFA par an** (365 jours). Dis-moi si tu les changes.
+- **Les prix** : **1 500 FCFA par mois** (30 jours) et **12 000 FCFA par an** (365 jours, soit 4 mois offerts). C'est un point de départ : regarde après 2 à 3 semaines combien de personnes passent au forfait, puis ajuste.
 - **Plafond de scans par jour pour tout le monde** : 300 par défaut. Au-delà, l'app répond « Calbasse est très sollicité, réessaie demain ». Il protège ton crédit tant que tu n'as pas mesuré la consommation réelle.
 
 Les limites (1 scan gratuit, 10 avec le forfait) sont déjà réglées.
@@ -56,7 +56,7 @@ Deux façons de faire payer, qui peuvent coexister :
 2. Il te paie en Mobile Money, sur ton numéro.
 3. Tu crées un code dans Supabase → **SQL Editor** :
    ```sql
-   select * from creer_codes('mensuel', 30, 1, 'Awa, 2000 FCFA, 24/11');
+   select * from creer_codes('mensuel', 30, 1, 'Awa, 1500 FCFA, 24/11');
    ```
    (`'annuel', 365` pour l'offre annuelle ; le nombre devant la note permet d'en créer plusieurs d'un coup.)
 4. Tu lui envoies le code (`CAL-XXXX-XXXX-XXXX`). Il le saisit dans Premium → « J'ai un code d'activation » : le forfait s'active tout de suite.
@@ -77,7 +77,7 @@ Il faut un compte marchand CinetPay (inscription et vérification de ton activit
 | `SCANS_GRATUITS` | scans par jour, forfait gratuit | 1 |
 | `SCANS_PREMIUM` | scans par jour, forfait payant | 10 |
 | `BUDGET_JOUR` | plafond de scans par jour, tous utilisateurs | 300 |
-| `PRIX_MENSUEL` / `PRIX_ANNUEL` | prix en FCFA (multiples de 5) | 2000 / 20000 |
+| `PRIX_MENSUEL` / `PRIX_ANNUEL` | prix en FCFA (multiples de 5) | 1500 / 12000 |
 | `CINETPAY_API_KEY`, `CINETPAY_SITE_ID` | paiement automatique (facultatif) | absent |
 
 ## Ensuite, Claude s'occupe de

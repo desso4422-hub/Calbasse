@@ -8,8 +8,8 @@
  *   SCANS_GRATUITS     scans par jour et par personne, forfait gratuit    1 par défaut
  *   SCANS_PREMIUM      scans par jour et par personne, forfait payant     10 par défaut
  *   BUDGET_JOUR        scans par jour pour tout le monde (plafond)       300 par défaut
- *   PRIX_MENSUEL       prix du forfait de 30 jours, en FCFA               2000 par défaut
- *   PRIX_ANNUEL        prix du forfait de 365 jours, en FCFA              20000 par défaut
+ *   PRIX_MENSUEL       prix du forfait de 30 jours, en FCFA               1500 par défaut
+ *   PRIX_ANNUEL        prix du forfait de 365 jours, en FCFA              12000 par défaut
  *   RODIUMAI_MODELE    modèle de vision                                  google/gemini-3.1-flash-lite
  *   CINETPAY_API_KEY, CINETPAY_SITE_ID   paiement en ligne (facultatif ; sans eux, seuls les codes d'activation marchent)
  * SUPABASE_URL et SUPABASE_SERVICE_ROLE_KEY sont fournis automatiquement par Supabase.
@@ -39,8 +39,8 @@ const config = {
   budget: entier('BUDGET_JOUR', 300),
   parMinute: entier('SCANS_PAR_MINUTE', 6),
   tarifs: {
-    mensuel: { montant: entier('PRIX_MENSUEL', 2000), jours: 30 },
-    annuel: { montant: entier('PRIX_ANNUEL', 20000), jours: 365 },
+    mensuel: { montant: entier('PRIX_MENSUEL', 1500), jours: 30 },
+    annuel: { montant: entier('PRIX_ANNUEL', 12000), jours: 365 },
   },
   cinetpay:
     env('CINETPAY_API_KEY') && env('CINETPAY_SITE_ID')

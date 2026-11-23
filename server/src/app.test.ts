@@ -140,7 +140,7 @@ test("paiement CinetPay : création, notification revérifiée, Premium activé 
   assert.equal(r.json.urlPaiement, `https://checkout.exemple/${transactionId}`);
 
   const creation = appelsCinetPay.find((a) => a.url.endsWith('/payment') && a.corps.transaction_id === transactionId)!;
-  assert.equal(creation.corps.amount, 2000);
+  assert.equal(creation.corps.amount, 1500);
   assert.equal(creation.corps.currency, 'XOF');
   assert.equal(creation.corps.notify_url, 'https://api.calbasse.exemple/cinetpay/notification');
 
@@ -148,7 +148,7 @@ test("paiement CinetPay : création, notification revérifiée, Premium activé 
   assert.equal((await appel(`/paiements/${transactionId}`, { jeton })).json.statut, 'en_attente');
 
   // CinetPay notifie (formulaire), le serveur redemande le statut et active Premium
-  statutsCinetPay.set(transactionId, { status: 'ACCEPTED', amount: '2000', currency: 'XOF' });
+  statutsCinetPay.set(transactionId, { status: 'ACCEPTED', amount: '1500', currency: 'XOF' });
   const notif = `cpm_site_id=123&cpm_trans_id=${transactionId}`;
   assert.equal((await appel('/cinetpay/notification', { corps: notif, type: 'application/x-www-form-urlencoded' })).statut, 200);
   const etat = (await appel('/compte', { jeton })).json;
@@ -162,7 +162,7 @@ test("paiement CinetPay : création, notification revérifiée, Premium activé 
   // Un deuxième achat prolonge à partir de la date de fin
   const r2 = await appel('/paiements', { jeton, corps: { plan: 'annuel' } });
   const t2 = r2.json.transactionId as string;
-  statutsCinetPay.set(t2, { status: 'ACCEPTED', amount: '20000', currency: 'XOF' });
+  statutsCinetPay.set(t2, { status: 'ACCEPTED', amount: '12000', currency: 'XOF' });
   const via = await appel(`/paiements/${t2}`, { jeton }); // l'app peut aussi demander le statut elle-même
   assert.equal(via.json.statut, 'accepte');
   assert.deepEqual((await appel('/compte', { jeton })).json.premium, { plan: 'annuel', jusquau: '2027-12-13' });
@@ -187,7 +187,7 @@ test('paiement : montant ou devise inattendus, notification forgée, paiement d�
 test('paiement refusé par CinetPay', async () => {
   const jeton = await nouveauCompte();
   const t = (await appel('/paiements', { jeton, corps: { plan: 'mensuel' } })).json.transactionId as string;
-  statutsCinetPay.set(t, { status: 'REFUSED', amount: '2000', currency: 'XOF' });
+  statutsCinetPay.set(t, { status: 'REFUSED', amount: '1500', currency: 'XOF' });
   assert.equal((await appel(`/paiements/${t}`, { jeton })).json.statut, 'refuse');
 });
 
@@ -223,7 +223,7 @@ test('téléphone perdu : le nouvel appareil récupère Premium, l’ancien est 
   // Ancien téléphone : Premium + numéro vérifié
   const ancien = await nouveauCompte();
   const t = (await appel('/paiements', { jeton: ancien, corps: { plan: 'annuel' } })).json.transactionId as string;
-  statutsCinetPay.set(t, { status: 'ACCEPTED', amount: '20000', currency: 'XOF' });
+  statutsCinetPay.set(t, { status: 'ACCEPTED', amount: '12000', currency: 'XOF' });
   await appel(`/paiements/${t}`, { jeton: ancien });
   await appel('/telephone/code', { jeton: ancien, corps: { numero: '+2250707000001' } });
   await appel('/telephone/verifier', { jeton: ancien, corps: { numero: '+2250707000001', code: dernierCode('+2250707000001') } });
