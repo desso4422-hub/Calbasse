@@ -3,12 +3,17 @@
  * le modèle de vision sont injectés. Cela permet de tester toute la logique (quotas, erreurs, corrections)
  * sans réseau. Le branchement réel est dans index.ts.
  *
- *   GET    /sante                 état du service (sans connexion)
- *   GET    /compte           🔒   scans restants aujourd'hui
+ *   GET    /sante                 état du service, tarifs, limites (sans connexion)
+ *   GET    /compte           🔒   forfait et scans restants aujourd'hui
  *   POST   /scan             🔒   { cle?, image, typeImage?, indice? } → aliments reconnus
  *   POST   /corrections      🔒   { scanId, proposees, finales }
  *   POST   /signalements     🔒   { jour, alimentId, repasNom? }
+ *   POST   /codes            🔒   { code } → active le forfait avec un code d'activation
+ *   POST   /paiements        🔒   { plan } → { transactionId, urlPaiement } (CinetPay)
+ *   GET    /paiements/:id    🔒   statut du paiement (revérifié auprès de CinetPay)
  *   DELETE /compte           🔒   supprime le compte et toutes ses données
+ *   POST   /cinetpay/notification   appelée par CinetPay (notify_url), sans connexion
+ *   GET    /cinetpay/retour         redirige vers l'app après le paiement (return_url)
  *
  * 🔒 = en-tête « Authorization: Bearer <jeton de connexion anonyme Supabase> »
  *
@@ -16,25 +21,40 @@
  * laquelle des deux elle interroge.
  */
 import type { ResultatScan, TypeImage } from '../_shared/vision.ts';
+import { creerPaiementCinetPay, verifierPaiementCinetPay, type ConfigCinetPay } from './cinetpay.ts';
 import { ErreurVision, RefusModele, ReponseIllisible, type Vision } from './rodium.ts';
 
 // ——— Ce que la fonction attend de la base de données ———
+
+export type Plan = 'mensuel' | 'annuel';
+/** Forfait payant en cours : { plan, jusquau: 'AAAA-MM-JJ' } ; null = forfait gratuit */
+export type Premium = { plan: Plan; jusquau: string } | null;
 
 export type Reservation = {
   statut: 'nouveau' | 'deja' | 'en_cours' | 'quota' | 'trop_vite' | 'budget';
   scan_id?: string;
   resultat?: Record<string, unknown>;
+  premium: Premium;
   limite: number;
   restants: number;
 };
 
+export type Paiement = { id: string; user_id: string; plan: Plan; montant: number; statut: 'en_attente' | 'accepte' | 'refuse' };
+
 export type Depots = {
   /** Le compte à qui appartient ce jeton, ou null s'il est invalide ou expiré */
   utilisateur(jeton: string): Promise<{ id: string } | null>;
-  reserverScan(id: string, cle: string, limite: number, budget: number, parMinute: number): Promise<Reservation>;
+  /** La limite du jour dépend du forfait de l'utilisateur : gratuit ou premium */
+  reserverScan(id: string, cle: string, gratuit: number, premium: number, budget: number, parMinute: number): Promise<Reservation>;
   terminerScan(scanId: string, p: { resultat: unknown; modele: string; dureeMs: number; usage: unknown; compte: boolean }): Promise<void>;
   echouerScan(scanId: string, erreur: string): Promise<void>;
-  etatCompte(id: string, limite: number): Promise<{ limite: number; restants: number }>;
+  etatCompte(id: string, gratuit: number, premium: number): Promise<{ limite: number; restants: number; premium: Premium }>;
+  utiliserCode(id: string, code: string): Promise<{ statut: 'ok' | 'invalide' | 'deja_utilise' | 'trop_essais' }>;
+  creerPaiement(id: string, plan: Plan, montant: number): Promise<string>;
+  lirePaiement(transactionId: string): Promise<Paiement | null>;
+  /** Active le forfait (une seule fois, même si elle est appelée deux fois) */
+  validerPaiement(transactionId: string, jours: number): Promise<void>;
+  refuserPaiement(transactionId: string): Promise<void>;
   /** false si ce scan n'appartient pas à cet utilisateur */
   enregistrerCorrection(id: string, c: { scanId: string; proposees: unknown; finales: unknown }): Promise<boolean>;
   enregistrerSignalement(id: string, s: { jour: string; alimentId: string; repasNom: string | null }): Promise<void>;
@@ -43,12 +63,17 @@ export type Depots = {
 
 export type Config = {
   modele: string;
-  /** Scans gratuits par jour et par personne */
-  limite: number;
+  /** Scans par jour et par personne, forfait gratuit */
+  gratuit: number;
+  /** Scans par jour et par personne, forfait payant */
+  premium: number;
   /** Scans par jour pour tout le monde : plafond de dépense */
   budget: number;
   /** Scans par minute et par personne */
   parMinute: number;
+  tarifs: Record<Plan, { montant: number; jours: number }>;
+  /** null : paiement en ligne non configuré (les codes d'activation fonctionnent quand même) */
+  cinetpay: ConfigCinetPay | null;
 };
 
 const TYPES: TypeImage[] = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
@@ -68,7 +93,8 @@ function repondre(statut: number, corps: unknown): Response {
   });
 }
 
-const compteDe = (restants: number, limite: number) => ({ premium: null, scansRestants: restants, limite, telephone: null });
+const compteDe = (restants: number, limite: number, premium: Premium) => ({ premium, scansRestants: restants, limite, telephone: null });
+const PLANS: Plan[] = ['mensuel', 'annuel'];
 
 async function lireCorps(req: Request): Promise<Record<string, unknown> | null> {
   if (Number(req.headers.get('content-length') ?? 0) > TAILLE_MAX_CORPS) return null;
@@ -82,8 +108,29 @@ async function lireCorps(req: Request): Promise<Record<string, unknown> | null> 
   }
 }
 
-export function creerGestionnaire(d: { depots: Depots; vision: Vision; config: Config }) {
+export function creerGestionnaire(d: { depots: Depots; vision: Vision; config: Config; http?: typeof fetch }) {
   const { depots, vision, config } = d;
+  const http = d.http ?? fetch;
+
+  /** Redemande le statut à CinetPay et applique le résultat : on ne croit jamais la notification reçue. */
+  async function confirmerPaiement(transactionId: string): Promise<string | null> {
+    const p = await depots.lirePaiement(transactionId);
+    if (!p || p.statut !== 'en_attente' || !config.cinetpay) return p?.statut ?? null;
+    const s = await verifierPaiementCinetPay(config.cinetpay, transactionId, http);
+    if (s.accepte) {
+      if (s.devise === 'XOF' && s.montant !== null && s.montant >= p.montant) {
+        await depots.validerPaiement(transactionId, config.tarifs[p.plan].jours);
+        return 'accepte';
+      }
+      console.error(`Paiement ${transactionId} accepté mais montant ou devise inattendus`, s.brut);
+      return 'en_attente';
+    }
+    if (s.echoue) {
+      await depots.refuserPaiement(transactionId);
+      return 'refuse';
+    }
+    return 'en_attente';
+  }
 
   return async (req: Request): Promise<Response> => {
     if (req.method === 'OPTIONS') return repondre(204, null);
@@ -91,7 +138,26 @@ export function creerGestionnaire(d: { depots: Depots; vision: Vision; config: C
     const chemin = new URL(req.url).pathname.replace(/^\/(functions\/v1\/)?api(?=\/|$)/, '').replace(/\/+$/, '') || '/';
     const methode = req.method;
 
-    if (methode === 'GET' && chemin === '/sante') return repondre(200, { ok: true, modele: config.modele });
+    if (methode === 'GET' && chemin === '/sante') {
+      return repondre(200, { ok: true, modele: config.modele, paiement: !!config.cinetpay, tarifs: config.tarifs, scansGratuits: config.gratuit, scansPremium: config.premium });
+    }
+
+    // Appelés par CinetPay, sans connexion
+    if (chemin === '/cinetpay/retour') {
+      return new Response(null, { status: 302, headers: { Location: 'calbasse://premium', ...CORS } });
+    }
+    if (chemin === '/cinetpay/notification') {
+      if (methode === 'POST') {
+        try {
+          const texte = await req.text();
+          const champs = (req.headers.get('content-type') ?? '').includes('json') ? (JSON.parse(texte) as Record<string, string>) : Object.fromEntries(new URLSearchParams(texte));
+          if (champs.cpm_trans_id) await confirmerPaiement(String(champs.cpm_trans_id));
+        } catch (e) {
+          console.error('Notification CinetPay non traitée :', e);
+        }
+      }
+      return repondre(200, { ok: true });     // CinetPay teste aussi l'adresse en GET
+    }
 
     const jeton = /^Bearer\s+(.+)$/i.exec(req.headers.get('authorization') ?? '')?.[1];
     if (!jeton) return repondre(401, { erreur: 'Connexion requise.' });
@@ -100,8 +166,8 @@ export function creerGestionnaire(d: { depots: Depots; vision: Vision; config: C
 
     try {
       if (methode === 'GET' && chemin === '/compte') {
-        const e = await depots.etatCompte(utilisateur.id, config.limite);
-        return repondre(200, compteDe(e.restants, e.limite));
+        const e = await depots.etatCompte(utilisateur.id, config.gratuit, config.premium);
+        return repondre(200, compteDe(e.restants, e.limite, e.premium));
       }
 
       if (methode === 'POST' && chemin === '/scan') return await scanner(utilisateur.id, req);
@@ -121,6 +187,42 @@ export function creerGestionnaire(d: { depots: Depots; vision: Vision; config: C
         }
         await depots.enregistrerSignalement(utilisateur.id, { jour: s.jour, alimentId: s.alimentId, repasNom: typeof s.repasNom === 'string' ? s.repasNom.slice(0, 200) : null });
         return repondre(200, { ok: true });
+      }
+
+      if (methode === 'POST' && chemin === '/codes') {
+        const c = await lireCorps(req);
+        if (!c || typeof c.code !== 'string' || c.code.length > 40) return repondre(400, { erreur: 'Code incorrect.', code: 'invalide' });
+        const r = await depots.utiliserCode(utilisateur.id, c.code);
+        if (r.statut === 'invalide') return repondre(400, { erreur: 'Code incorrect. Vérifie-le et réessaie.', code: 'invalide' });
+        if (r.statut === 'deja_utilise') return repondre(409, { erreur: 'Ce code a déjà été utilisé.', code: 'deja_utilise' });
+        if (r.statut === 'trop_essais') return repondre(429, { erreur: 'Trop d’essais. Réessaie dans une heure ou écris-nous.', code: 'trop_essais' });
+        const e = await depots.etatCompte(utilisateur.id, config.gratuit, config.premium);
+        return repondre(200, { ok: true, compte: compteDe(e.restants, e.limite, e.premium) });
+      }
+
+      if (methode === 'POST' && chemin === '/paiements') {
+        if (!config.cinetpay) return repondre(503, { erreur: "Le paiement en ligne n'est pas encore disponible. Utilise un code d'activation.", code: 'paiement_indisponible' });
+        const c = await lireCorps(req);
+        const plan = c?.plan as Plan;
+        if (!PLANS.includes(plan)) return repondre(400, { erreur: 'Formule inconnue.' });
+        const transactionId = await depots.creerPaiement(utilisateur.id, plan, config.tarifs[plan].montant);
+        try {
+          const urlPaiement = await creerPaiementCinetPay(config.cinetpay, { transactionId, montant: config.tarifs[plan].montant, description: `Calbasse Premium ${plan}`, compteId: utilisateur.id }, http);
+          return repondre(201, { transactionId, urlPaiement });
+        } catch (e) {
+          await depots.refuserPaiement(transactionId).catch(() => {});
+          console.error('Paiement non créé :', e);
+          return repondre(502, { erreur: 'Le paiement n’a pas pu démarrer. Réessaie dans un instant.' });
+        }
+      }
+
+      const suivi = /^\/paiements\/([A-Z0-9]+)$/.exec(chemin);
+      if (methode === 'GET' && suivi) {
+        const p = await depots.lirePaiement(suivi[1]);
+        if (!p || p.user_id !== utilisateur.id) return repondre(404, { erreur: 'Paiement introuvable.' });
+        const statut = await confirmerPaiement(p.id).catch(() => p.statut);
+        const e = await depots.etatCompte(utilisateur.id, config.gratuit, config.premium);
+        return repondre(200, { statut, compte: compteDe(e.restants, e.limite, e.premium) });
       }
 
       if (methode === 'DELETE' && chemin === '/compte') {
@@ -146,14 +248,14 @@ export function creerGestionnaire(d: { depots: Depots; vision: Vision; config: C
     // La clé identifie la photo : renvoyée après une coupure, elle rend le même résultat sans nouveau décompte
     const cle = typeof corps.cle === 'string' && /^[\w-]{8,64}$/.test(corps.cle) ? corps.cle : crypto.randomUUID();
 
-    const r = await depots.reserverScan(id, cle, config.limite, config.budget, config.parMinute);
+    const r = await depots.reserverScan(id, cle, config.gratuit, config.premium, config.budget, config.parMinute);
     switch (r.statut) {
       case 'deja':
-        return repondre(200, { ...r.resultat, compte: compteDe(r.restants, r.limite) });
+        return repondre(200, { ...r.resultat, compte: compteDe(r.restants, r.limite, r.premium) });
       case 'en_cours':
         return repondre(503, { erreur: 'Analyse déjà en cours, réessaie dans un instant.', code: 'en_cours' });
       case 'quota':
-        return repondre(402, { erreur: 'Tu as utilisé tous tes scans du jour.', code: 'quota', ...compteDe(0, r.limite) });
+        return repondre(402, { erreur: 'Tu as utilisé tous tes scans du jour.', code: 'quota', ...compteDe(0, r.limite, r.premium) });
       case 'trop_vite':
         return repondre(429, { erreur: 'Doucement : réessaie dans une minute.', code: 'trop_vite' });
       case 'budget':
@@ -178,7 +280,7 @@ export function creerGestionnaire(d: { depots: Depots; vision: Vision; config: C
     await depots.terminerScan(scanId, { resultat: reponse, modele, dureeMs: Date.now() - debut, usage, compte: resultat.estUnRepas }).catch((e) => {
       console.error('Résultat non enregistré :', e);
     });
-    return repondre(200, { ...reponse, compte: compteDe(restants, r.limite) });
+    return repondre(200, { ...reponse, compte: compteDe(restants, r.limite, r.premium) });
   }
 }
 

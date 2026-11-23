@@ -9,11 +9,12 @@
  * Sans RODIUMAI_API_KEY, les scans renvoient un résultat de démonstration.
  */
 import { createServer, type IncomingMessage } from 'node:http';
-import { creerGestionnaire, type Depots, type Reservation } from '../functions/api/core.ts';
+import { creerGestionnaire, type Depots, type Paiement, type Premium, type Reservation } from '../functions/api/core.ts';
 import { creerVision, type Vision } from '../functions/api/rodium.ts';
 
 const PORT = Number(process.env.PORT ?? 54321);
-const LIMITE = Number(process.env.SCANS_PAR_JOUR ?? 5);
+const GRATUITS = Number(process.env.SCANS_GRATUITS ?? 1);
+const PREMIUM = Number(process.env.SCANS_PREMIUM ?? 10);
 
 type Scan = { id: string; user: string; cle: string; jour: string; statut: 'en_cours' | 'ok' | 'hors_sujet' | 'echec'; resultat?: Record<string, unknown>; cree: number };
 const utilisateurs = new Set<string>();
@@ -22,6 +23,19 @@ const refresh = new Map<string, string>();    // jeton de renouvellement → uti
 const scans: Scan[] = [];
 const corrections: { user: string; scanId: string; proposees: unknown; finales: unknown }[] = [];
 const signalements: { user: string; alimentId: string }[] = [];
+const abonnements = new Map<string, { plan: 'mensuel' | 'annuel'; fin: number }>();
+const codes = new Map<string, { plan: 'mensuel' | 'annuel'; jours: number; utilisePar?: string }>();
+const paiements = new Map<string, Paiement>();
+const essais = new Map<string, number>();
+
+const forfait = (id: string): Premium => {
+  const a = abonnements.get(id);
+  return a && a.fin > Date.now() ? { plan: a.plan, jusquau: new Date(a.fin + 3600_000).toISOString().slice(0, 10) } : null;
+};
+const activer = (id: string, plan: 'mensuel' | 'annuel', jours: number) => {
+  const a = abonnements.get(id);
+  abonnements.set(id, { plan, fin: Math.max(Date.now(), a?.fin ?? 0) + jours * 86_400_000 });
+};
 
 const jourLagos = () => new Date(Date.now() + 3600_000).toISOString().slice(0, 10);
 const compte = (s: Scan) => s.statut === 'ok' || (s.statut === 'en_cours' && Date.now() - s.cree < 180_000);
@@ -31,21 +45,23 @@ const depots: Depots = {
     const id = jetons.get(jeton);
     return id && utilisateurs.has(id) ? { id } : null;
   },
-  async reserverScan(id, cle, limite, budget, parMinute): Promise<Reservation> {
+  async reserverScan(id, cle, gratuit, premium, budget, parMinute): Promise<Reservation> {
     const jour = jourLagos();
+    const f = forfait(id);
+    const limite = f ? premium : gratuit;
     const existant = scans.find((s) => s.user === id && s.cle === cle);
     const autres = scans.filter((s) => s.user === id && s.jour === jour && s.cle !== cle && compte(s)).length;
     if (existant && (existant.statut === 'ok' || existant.statut === 'hors_sujet')) {
-      return { statut: 'deja', scan_id: existant.id, resultat: existant.resultat, limite, restants: Math.max(0, limite - autres - (existant.statut === 'ok' ? 1 : 0)) };
+      return { statut: 'deja', scan_id: existant.id, resultat: existant.resultat, premium: f, limite, restants: Math.max(0, limite - autres - (existant.statut === 'ok' ? 1 : 0)) };
     }
-    if (existant && existant.statut === 'en_cours' && Date.now() - existant.cree < 180_000) return { statut: 'en_cours', scan_id: existant.id, limite, restants: limite - autres - 1 };
-    if (autres >= limite) return { statut: 'quota', limite, restants: 0 };
-    if (scans.filter((s) => s.user === id && s.cle !== cle && Date.now() - s.cree < 60_000).length >= parMinute) return { statut: 'trop_vite', limite, restants: limite - autres };
-    if (scans.filter((s) => s.jour === jour && compte(s)).length >= budget) return { statut: 'budget', limite, restants: limite - autres };
+    if (existant && existant.statut === 'en_cours' && Date.now() - existant.cree < 180_000) return { statut: 'en_cours', scan_id: existant.id, premium: f, limite, restants: limite - autres - 1 };
+    if (autres >= limite) return { statut: 'quota', premium: f, limite, restants: 0 };
+    if (scans.filter((s) => s.user === id && s.cle !== cle && Date.now() - s.cree < 60_000).length >= parMinute) return { statut: 'trop_vite', premium: f, limite, restants: limite - autres };
+    if (scans.filter((s) => s.jour === jour && compte(s)).length >= budget) return { statut: 'budget', premium: f, limite, restants: limite - autres };
     const s: Scan = existant ?? { id: crypto.randomUUID(), user: id, cle, jour, statut: 'en_cours', cree: Date.now() };
     Object.assign(s, { jour, statut: 'en_cours', cree: Date.now() });
     if (!existant) scans.push(s);
-    return { statut: 'nouveau', scan_id: s.id, limite, restants: limite - autres - 1 };
+    return { statut: 'nouveau', scan_id: s.id, premium: f, limite, restants: limite - autres - 1 };
   },
   async terminerScan(scanId, p) {
     const s = scans.find((x) => x.id === scanId)!;
@@ -54,9 +70,32 @@ const depots: Depots = {
   async echouerScan(scanId) {
     scans.find((x) => x.id === scanId)!.statut = 'echec';
   },
-  async etatCompte(id, limite) {
-    return { limite, restants: Math.max(0, limite - scans.filter((s) => s.user === id && s.jour === jourLagos() && compte(s)).length) };
+  async etatCompte(id, gratuit, premium) {
+    const f = forfait(id);
+    const limite = f ? premium : gratuit;
+    return { limite, premium: f, restants: Math.max(0, limite - scans.filter((s) => s.user === id && s.jour === jourLagos() && compte(s)).length) };
   },
+  async utiliserCode(id, code) {
+    const essaisRecents = essais.get(id) ?? 0;
+    if (essaisRecents >= 5) return { statut: 'trop_essais' };
+    const c = codes.get(code.trim().toUpperCase());
+    if (!c) { essais.set(id, essaisRecents + 1); return { statut: 'invalide' }; }
+    if (c.utilisePar) { essais.set(id, essaisRecents + 1); return { statut: 'deja_utilise' }; }
+    c.utilisePar = id;
+    activer(id, c.plan, c.jours);
+    return { statut: 'ok' };
+  },
+  async creerPaiement(id, plan, montant) {
+    const tid = 'CAL' + crypto.randomUUID().replace(/-/g, '').slice(0, 18).toUpperCase();
+    paiements.set(tid, { id: tid, user_id: id, plan, montant, statut: 'en_attente' });
+    return tid;
+  },
+  async lirePaiement(tid) { return paiements.get(tid) ?? null; },
+  async validerPaiement(tid, jours) {
+    const p = paiements.get(tid);
+    if (p && p.statut === 'en_attente') { p.statut = 'accepte'; activer(p.user_id, p.plan, jours); }
+  },
+  async refuserPaiement(tid) { const p = paiements.get(tid); if (p && p.statut === 'en_attente') p.statut = 'refuse'; },
   async enregistrerCorrection(id, c) {
     if (!scans.some((s) => s.id === c.scanId && s.user === id)) return false;
     corrections.push({ user: id, ...c });
@@ -89,7 +128,14 @@ const demo: Vision = async () => ({
   },
 });
 const vision = cleApi ? creerVision({ cleApi, urlApi: 'https://api.rodiumai.io/v1', modele: 'google/gemini-3.1-flash-lite' }) : demo;
-const api = creerGestionnaire({ depots, vision, config: { modele: 'faux', limite: LIMITE, budget: 300, parMinute: 6 } });
+const api = creerGestionnaire({
+  depots,
+  vision,
+  config: {
+    modele: 'faux', gratuit: GRATUITS, premium: PREMIUM, budget: 300, parMinute: 6, cinetpay: null,
+    tarifs: { mensuel: { montant: 2000, jours: 30 }, annuel: { montant: 20000, jours: 365 } },
+  },
+});
 
 const CORS = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': 'GET, POST, DELETE, OPTIONS' };
 async function corps(req: IncomingMessage): Promise<Buffer> {
@@ -126,9 +172,16 @@ createServer(async (req, res) => {
     const headers = new Headers();
     for (const [k, v] of Object.entries(req.headers)) if (typeof v === 'string') headers.set(k, v);
     const r = await api(new Request(url, { method: req.method, headers, body: ['GET', 'HEAD'].includes(req.method ?? 'GET') ? undefined : donnees }));
+    console.log(`  → ${r.status}`);
     res.writeHead(r.status, Object.fromEntries(r.headers));
     return res.end(Buffer.from(await r.arrayBuffer()));
   }
-  if (url.pathname === '/__etat') return ecrire(200, { utilisateurs: utilisateurs.size, scans: scans.length, corrections, signalements });
+  // Outil d'essai : joue le rôle de « select * from creer_codes('mensuel', 30, 1) » dans l'éditeur SQL de Supabase
+  if (url.pathname === '/__creer-code') {
+    const code = 'CAL-' + crypto.randomUUID().replace(/-/g, '').slice(0, 12).toUpperCase().replace(/(.{4})(.{4})(.{4})/, '$1-$2-$3');
+    codes.set(code, { plan: 'mensuel', jours: 30 });
+    return ecrire(200, { code });
+  }
+  if (url.pathname === '/__etat') return ecrire(200, { utilisateurs: utilisateurs.size, scans: scans.length, corrections, signalements, abonnes: [...abonnements.keys()].length });
   return ecrire(404, { erreur: 'inconnu' });
-}).listen(PORT, '127.0.0.1', () => console.log(`Faux Supabase prêt sur http://127.0.0.1:${PORT} (${cleApi ? 'vraie reconnaissance' : 'résultat de démonstration'}, ${LIMITE} scans/jour)`));
+}).listen(PORT, '127.0.0.1', () => console.log(`Faux Supabase prêt sur http://127.0.0.1:${PORT} (${cleApi ? 'vraie reconnaissance' : 'résultat de démonstration'}, ${GRATUITS} gratuit / ${PREMIUM} premium par jour)`));

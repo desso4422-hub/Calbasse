@@ -52,3 +52,41 @@ export async function suivrePaiement(transactionId: string): Promise<SuiviPaieme
   const r = await appelApi(`/paiements/${transactionId}`);
   return { statut: (r.statut as SuiviPaiement['statut']) ?? 'en_attente', compte: r.compte as EtatCompteServeur | undefined };
 }
+
+export type Offre = {
+  /** Le paiement en ligne (CinetPay) est configuré côté serveur */
+  paiement: boolean;
+  tarifs: { mensuel: { prix: number; jours: number }; annuel: { prix: number; jours: number } };
+  scansGratuits: number;
+  scansPremium: number;
+};
+
+/** Prix et limites tels que le serveur les applique : une seule source de vérité. Null si on ne peut pas les lire. */
+export async function chargerOffre(): Promise<Offre | null> {
+  if (!serveurConfigure) return null;
+  try {
+    const r = (await appelApi('/sante')) as { paiement?: boolean; tarifs?: Record<string, { montant: number; jours: number }>; scansGratuits?: number; scansPremium?: number };
+    if (!r.tarifs?.mensuel || !r.tarifs?.annuel) return null;
+    return {
+      paiement: !!r.paiement,
+      tarifs: {
+        mensuel: { prix: r.tarifs.mensuel.montant, jours: r.tarifs.mensuel.jours },
+        annuel: { prix: r.tarifs.annuel.montant, jours: r.tarifs.annuel.jours },
+      },
+      scansGratuits: r.scansGratuits ?? 1,
+      scansPremium: r.scansPremium ?? 10,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/** Active le forfait avec un code d'activation reçu après un paiement Mobile Money. */
+export async function utiliserCode(code: string): Promise<EtatCompteServeur> {
+  try {
+    const r = await appelApi('/codes', { methode: 'POST', corps: { code } });
+    return r.compte as EtatCompteServeur;
+  } catch (e) {
+    throw new ErreurPaiement(e instanceof ErreurApi ? e.message : 'Le code n’a pas pu être vérifié. Vérifie ta connexion et réessaie.');
+  }
+}

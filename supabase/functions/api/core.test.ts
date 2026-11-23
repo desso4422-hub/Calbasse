@@ -2,9 +2,10 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { creerGestionnaire, type Depots, type Reservation } from './core.ts';
+import { creerGestionnaire, type Depots, type Paiement, type Premium, type Reservation } from './core.ts';
 import { creerVision, ErreurVision, RefusModele, ReponseIllisible, type Vision } from './rodium.ts';
 import type { ResultatScan } from '../_shared/vision.ts';
+import type { ConfigCinetPay } from './cinetpay.ts';
 
 const REPAS: ResultatScan = {
   estUnRepas: true,
@@ -15,24 +16,55 @@ const REPAS: ResultatScan = {
   remarque: '',
 };
 
-type Appels = { reserver: unknown[][]; terminer: unknown[][]; echouer: unknown[][]; corrections: unknown[][]; signalements: unknown[][]; supprimes: string[] };
+function fauxFetch(reponses: { statut: number; corps: object }[]) {
+  const appels: { url: string; headers: Record<string, string>; corps: Record<string, unknown> }[] = [];
+  const http = (async (url: string | URL | Request, init?: RequestInit) => {
+    appels.push({ url: String(url), headers: init?.headers as Record<string, string>, corps: JSON.parse(String(init?.body)) });
+    const r = reponses[Math.min(appels.length - 1, reponses.length - 1)];
+    return new Response(JSON.stringify(r.corps), { status: r.statut, headers: { 'Content-Type': 'application/json' } });
+  }) as typeof fetch;
+  return { http, appels };
+}
+
+type Appels = {
+  reserver: unknown[][]; terminer: unknown[][]; echouer: unknown[][]; corrections: unknown[][]; signalements: unknown[][]; supprimes: string[];
+  codes: unknown[][]; paiementsCrees: unknown[][]; valides: unknown[][]; refuses: string[];
+};
+type Options = {
+  limite?: number; statut?: Reservation['statut']; restants?: number; scansDe?: Record<string, string>; premium?: Premium;
+  code?: 'ok' | 'invalide' | 'deja_utilise' | 'trop_essais'; paiements?: Record<string, Paiement>;
+};
 
 /** Une fausse base : reproduit les règles du SQL en mémoire (un compte, une limite par jour). */
-function fauxDepots(opts: { limite?: number; statut?: Reservation['statut']; restants?: number; scansDe?: Record<string, string> } = {}) {
-  const appels: Appels = { reserver: [], terminer: [], echouer: [], corrections: [], signalements: [], supprimes: [] };
+function fauxDepots(opts: Options = {}) {
+  const appels: Appels = { reserver: [], terminer: [], echouer: [], corrections: [], signalements: [], supprimes: [], codes: [], paiementsCrees: [], valides: [], refuses: [] };
+  const paiements = { ...(opts.paiements ?? {}) };
   const depots: Depots = {
     async utilisateur(jeton) {
       return jeton === 'jeton-valide' ? { id: 'u1' } : jeton === 'jeton-autre' ? { id: 'u2' } : null;
     },
     async reserverScan(...a) {
       appels.reserver.push(a);
-      const limite = opts.limite ?? 5;
+      const limite = opts.limite ?? (opts.premium ? 10 : 1);
       const statut = opts.statut ?? 'nouveau';
-      return { statut, scan_id: 'scan-1', resultat: { scanId: 'scan-1', ...REPAS }, limite, restants: opts.restants ?? limite - 1 };
+      return { statut, scan_id: 'scan-1', resultat: { scanId: 'scan-1', ...REPAS }, premium: opts.premium ?? null, limite, restants: opts.restants ?? limite - 1 };
     },
     async terminerScan(...a) { appels.terminer.push(a); },
     async echouerScan(...a) { appels.echouer.push(a); },
-    async etatCompte(_id, limite) { return { limite, restants: opts.restants ?? limite }; },
+    async etatCompte(_id, gratuit, premium) {
+      const limite = opts.limite ?? (opts.premium ? premium : gratuit);
+      return { limite, restants: opts.restants ?? limite, premium: opts.premium ?? null };
+    },
+    async utiliserCode(...a) {
+      appels.codes.push(a);
+      const statut = opts.code ?? 'ok';
+      if (statut === 'ok') opts.premium = { plan: 'mensuel', jusquau: '2026-12-23' };
+      return { statut };
+    },
+    async creerPaiement(...a) { appels.paiementsCrees.push(a); const id = 'CAL0000000000000001'; paiements[id] = { id, user_id: 'u1', plan: a[1], montant: a[2], statut: 'en_attente' }; return id; },
+    async lirePaiement(id) { return paiements[id] ?? null; },
+    async validerPaiement(...a) { appels.valides.push(a); paiements[a[0]].statut = 'accepte'; opts.premium = { plan: paiements[a[0]].plan, jusquau: '2026-12-23' }; },
+    async refuserPaiement(id) { appels.refuses.push(id); if (paiements[id]) paiements[id].statut = 'refuse'; },
     async enregistrerCorrection(id, c) { appels.corrections.push([id, c]); return (opts.scansDe ?? { 'scan-1': 'u1' })[c.scanId] === id; },
     async enregistrerSignalement(...a) { appels.signalements.push(a); },
     async supprimerCompte(id) { appels.supprimes.push(id); },
@@ -40,13 +72,22 @@ function fauxDepots(opts: { limite?: number; statut?: Reservation['statut']; res
   return { depots, appels };
 }
 
-const config = { modele: 'google/gemini-3.1-flash-lite', limite: 5, budget: 300, parMinute: 6 };
+const config = {
+  modele: 'google/gemini-3.1-flash-lite',
+  gratuit: 1,
+  premium: 10,
+  budget: 300,
+  parMinute: 6,
+  tarifs: { mensuel: { montant: 2000, jours: 30 }, annuel: { montant: 20000, jours: 365 } },
+  cinetpay: null as ConfigCinetPay | null,
+};
+const cinetpay: ConfigCinetPay = { apiKey: 'cle-cinetpay', siteId: '123', urlApi: 'https://api-checkout.cinetpay.exemple/v2', urlPublique: 'https://x.supabase.co/functions/v1/api' };
 const visionOk: Vision = async () => ({ resultat: REPAS, usage: { prompt_tokens: 10400 }, modele: config.modele });
 const visionQui = (e: unknown): Vision => async () => { throw e; };
 
-function appli(opts: Parameters<typeof fauxDepots>[0] = {}, vision: Vision = visionOk) {
+function appli(opts: Options = {}, vision: Vision = visionOk, avecPaiement?: { http: typeof fetch }) {
   const { depots, appels } = fauxDepots(opts);
-  const gerer = creerGestionnaire({ depots, vision, config });
+  const gerer = creerGestionnaire({ depots, vision, config: avecPaiement ? { ...config, cinetpay } : config, http: avecPaiement?.http });
   const appeler = (methode: string, chemin: string, corps?: unknown, jeton: string | null = 'jeton-valide') =>
     gerer(new Request(`https://x.supabase.co/functions/v1/api${chemin}`, {
       method: methode,
@@ -79,9 +120,14 @@ test('les chemins /api/… et /functions/v1/api/… mènent aux mêmes routes', 
   }
 });
 
-test('compte : scans restants au format attendu par l’app', async () => {
-  const r = await appli({ restants: 3 }).appeler('GET', '/compte');
-  assert.deepEqual(await r.json(), { premium: null, scansRestants: 3, limite: 5, telephone: null });
+test('compte : forfait gratuit, 1 scan par jour', async () => {
+  const r = await appli().appeler('GET', '/compte');
+  assert.deepEqual(await r.json(), { premium: null, scansRestants: 1, limite: 1, telephone: null });
+});
+
+test('compte : forfait payant, 10 scans par jour, au format attendu par l’app', async () => {
+  const r = await appli({ restants: 7, premium: { plan: 'mensuel', jusquau: '2026-12-23' } }).appeler('GET', '/compte');
+  assert.deepEqual(await r.json(), { premium: { plan: 'mensuel', jusquau: '2026-12-23' }, scansRestants: 7, limite: 10, telephone: null });
 });
 
 test('scan : la clé de la photo, la limite et le budget sont transmis ; le résultat revient avec le compte', async () => {
@@ -91,8 +137,8 @@ test('scan : la clé de la photo, la limite et le budget sont transmis ; le rés
   const j = await r.json();
   assert.equal(j.scanId, 'scan-1');
   assert.equal(j.nom, 'Garba');
-  assert.deepEqual(j.compte, { premium: null, scansRestants: 4, limite: 5, telephone: null });
-  assert.deepEqual(appels.reserver[0], ['u1', 'photo-0001', 5, 300, 6]);
+  assert.deepEqual(j.compte, { premium: null, scansRestants: 0, limite: 1, telephone: null });
+  assert.deepEqual(appels.reserver[0], ['u1', 'photo-0001', 1, 10, 300, 6], 'la base reçoit les deux limites et choisit selon le forfait');
   const t = appels.terminer[0] as [string, { compte: boolean; modele: string; resultat: { scanId: string } }];
   assert.equal(t[0], 'scan-1');
   assert.equal(t[1].compte, true);
@@ -101,7 +147,7 @@ test('scan : la clé de la photo, la limite et le budget sont transmis ; le rés
 
 test('scan : une photo sans nourriture ne coûte pas de scan', async () => {
   const sansRepas: Vision = async () => ({ resultat: { ...REPAS, estUnRepas: false, lignes: [] }, usage: {}, modele: 'm' });
-  const { appeler, appels } = appli({ restants: 4 }, sansRepas);
+  const { appeler, appels } = appli({ limite: 10, restants: 4, premium: { plan: 'mensuel', jusquau: '2026-12-23' } }, sansRepas);
   const j = await (await appeler('POST', '/scan', photo)).json();
   assert.equal(j.compte.scansRestants, 5, 'le scan réservé est rendu');
   assert.equal((appels.terminer[0] as [string, { compte: boolean }])[1].compte, false);
@@ -109,7 +155,7 @@ test('scan : une photo sans nourriture ne coûte pas de scan', async () => {
 
 test('scan : un renvoi de la même photo rend le même résultat, sans appeler le modèle', async () => {
   let appelsModele = 0;
-  const { appeler } = appli({ statut: 'deja', restants: 2 }, async () => { appelsModele++; return { resultat: REPAS, usage: {}, modele: 'm' }; });
+  const { appeler } = appli({ statut: 'deja', limite: 10, restants: 2 }, async () => { appelsModele++; return { resultat: REPAS, usage: {}, modele: 'm' }; });
   const r = await appeler('POST', '/scan', photo);
   assert.equal(r.status, 200);
   assert.equal((await r.json()).compte.scansRestants, 2);
@@ -122,7 +168,8 @@ test('scan : limites atteintes, avec les codes que l’app comprend', async () =
   const jq = await quota.json();
   assert.equal(jq.code, 'quota');
   assert.equal(jq.scansRestants, 0);
-  assert.equal(jq.limite, 5);
+  assert.equal(jq.limite, 1);
+  assert.equal(jq.premium, null, 'l’app propose alors le forfait');
 
   const vite = await appli({ statut: 'trop_vite' }).appeler('POST', '/scan', photo);
   assert.equal(vite.status, 429);
@@ -217,17 +264,138 @@ test('CORS et routes inconnues', async () => {
   assert.equal((await appeler('GET', '/nimporte')).status, 404);
 });
 
+
+test('santé : l’app y lit les tarifs et les limites, et si le paiement en ligne existe', async () => {
+  const sans = await (await appli().appeler('GET', '/sante', undefined, null)).json();
+  assert.deepEqual(sans.tarifs, config.tarifs);
+  assert.equal(sans.scansGratuits, 1);
+  assert.equal(sans.scansPremium, 10);
+  assert.equal(sans.paiement, false);
+  const avec = await (await appli({}, visionOk, { http: fauxFetch([]).http }).appeler('GET', '/sante', undefined, null)).json();
+  assert.equal(avec.paiement, true);
+});
+
+test('code d’activation : le forfait est activé et le compte renvoyé', async () => {
+  const { appeler, appels } = appli();
+  const r = await appeler('POST', '/codes', { code: 'CAL-1A2B-3C4D-5E6F' });
+  assert.equal(r.status, 200);
+  const j = await r.json();
+  assert.deepEqual(j.compte, { premium: { plan: 'mensuel', jusquau: '2026-12-23' }, scansRestants: 10, limite: 10, telephone: null });
+  assert.deepEqual(appels.codes[0], ['u1', 'CAL-1A2B-3C4D-5E6F']);
+});
+
+test('code d’activation : refus clairs, avec les codes que l’app comprend', async () => {
+  const cas: [NonNullable<Options['code']>, number, RegExp][] = [
+    ['invalide', 400, /Code incorrect/],
+    ['deja_utilise', 409, /déjà été utilisé/],
+    ['trop_essais', 429, /Trop d’essais/],
+  ];
+  for (const [statut, http, message] of cas) {
+    const r = await appli({ code: statut }).appeler('POST', '/codes', { code: 'CAL-0000-0000-0000' });
+    assert.equal(r.status, http, statut);
+    const j = await r.json();
+    assert.equal(j.code, statut);
+    assert.match(j.erreur, message);
+  }
+  assert.equal((await appli().appeler('POST', '/codes', {})).status, 400);
+  assert.equal((await appli().appeler('POST', '/codes', { code: 'x'.repeat(41) })).status, 400);
+  assert.equal((await appli().appeler('POST', '/codes', { code: 'CAL-1A2B-3C4D-5E6F' }, null)).status, 401);
+});
+
+// ——— Paiement en ligne (CinetPay) ———
+
+const cinetpayRepond = (...reponses: { statut: number; corps: object }[]) => fauxFetch(reponses);
+const creation = { statut: 200, corps: { code: '201', data: { payment_url: 'https://checkout.cinetpay.exemple/pay/abc' } } };
+const verif = (statut: string, montant: number, devise = 'XOF') => ({ statut: 200, corps: { code: '00', data: { status: statut, amount: montant, currency: devise } } });
+
+test('paiement : la transaction est créée au prix du forfait et l’adresse de paiement renvoyée', async () => {
+  const f = cinetpayRepond(creation);
+  const { appeler, appels } = appli({}, visionOk, { http: f.http });
+  const r = await appeler('POST', '/paiements', { plan: 'annuel' });
+  assert.equal(r.status, 201);
+  assert.deepEqual(await r.json(), { transactionId: 'CAL0000000000000001', urlPaiement: 'https://checkout.cinetpay.exemple/pay/abc' });
+  assert.deepEqual(appels.paiementsCrees[0], ['u1', 'annuel', 20000]);
+  assert.equal(f.appels[0].corps.amount, 20000);
+  assert.equal(f.appels[0].corps.notify_url, 'https://x.supabase.co/functions/v1/api/cinetpay/notification');
+  assert.equal(f.appels[0].corps.metadata, 'u1');
+});
+
+test('paiement : indisponible sans CinetPay, formule inconnue, ou refus de CinetPay', async () => {
+  const sans = await appli().appeler('POST', '/paiements', { plan: 'mensuel' });
+  assert.equal(sans.status, 503);
+  assert.equal((await sans.json()).code, 'paiement_indisponible');
+
+  assert.equal((await appli({}, visionOk, { http: cinetpayRepond().http }).appeler('POST', '/paiements', { plan: 'gratuit' })).status, 400);
+
+  const refus = appli({}, visionOk, { http: cinetpayRepond({ statut: 200, corps: { code: '608', message: 'MINIMUM_REQUIRED_FIELDS' } }).http });
+  const r = await refus.appeler('POST', '/paiements', { plan: 'mensuel' });
+  assert.equal(r.status, 502);
+  assert.deepEqual(refus.appels.refuses, ['CAL0000000000000001'], 'la transaction est annulée, pas laissée en attente');
+});
+
+const enAttente = (extra: Partial<Paiement> = {}): Options => ({ paiements: { CAL0000000000000001: { id: 'CAL0000000000000001', user_id: 'u1', plan: 'mensuel', montant: 2000, statut: 'en_attente', ...extra } } });
+
+test('paiement : accepté chez CinetPay, le forfait est activé et le compte renvoyé', async () => {
+  const { appeler, appels } = appli(enAttente(), visionOk, { http: cinetpayRepond(verif('ACCEPTED', 2000)).http });
+  const r = await appeler('GET', '/paiements/CAL0000000000000001');
+  const j = await r.json();
+  assert.equal(j.statut, 'accepte');
+  assert.equal(j.compte.premium.plan, 'mensuel');
+  assert.deepEqual(appels.valides[0], ['CAL0000000000000001', 30]);
+});
+
+test('paiement : on ne croit pas le montant ni la devise annoncés par erreur', async () => {
+  for (const [montant, devise] of [[500, 'XOF'], [2000, 'USD']] as const) {
+    const { appeler, appels } = appli(enAttente(), visionOk, { http: cinetpayRepond(verif('ACCEPTED', montant, devise)).http });
+    const j = await (await appeler('GET', '/paiements/CAL0000000000000001')).json();
+    assert.equal(j.statut, 'en_attente', `${montant} ${devise}`);
+    assert.equal(appels.valides.length, 0);
+  }
+});
+
+test('paiement : refusé ou en attente chez CinetPay', async () => {
+  const refuse = appli(enAttente(), visionOk, { http: cinetpayRepond(verif('REFUSED', 0)).http });
+  assert.equal((await (await refuse.appeler('GET', '/paiements/CAL0000000000000001')).json()).statut, 'refuse');
+  assert.equal(refuse.appels.refuses.length, 1);
+  const attente = appli(enAttente(), visionOk, { http: cinetpayRepond(verif('WAITING_FOR_CUSTOMER', 0)).http });
+  assert.equal((await (await attente.appeler('GET', '/paiements/CAL0000000000000001')).json()).statut, 'en_attente');
+});
+
+test('paiement : on ne voit que ses propres paiements', async () => {
+  const { appeler } = appli(enAttente({ user_id: 'u2' }), visionOk, { http: cinetpayRepond().http });
+  assert.equal((await appeler('GET', '/paiements/CAL0000000000000001')).status, 404);
+  assert.equal((await appeler('GET', '/paiements/CAL9999999999999999')).status, 404);
+});
+
+test('notification de CinetPay : sert de signal, le statut est revérifié ; JSON ou formulaire', async () => {
+  const f = cinetpayRepond(verif('ACCEPTED', 2000));
+  const { depots, appels } = fauxDepots(enAttente());
+  const gerer = creerGestionnaire({ depots, vision: visionOk, config: { ...config, cinetpay }, http: f.http });
+  const r = await gerer(new Request('https://x.co/functions/v1/api/cinetpay/notification', { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'cpm_trans_id=CAL0000000000000001&cpm_site_id=123' }));
+  assert.equal(r.status, 200);
+  assert.equal(f.appels.length, 1, 'le statut est redemandé à CinetPay');
+  assert.equal(appels.valides.length, 1);
+
+  // Une fausse notification pour une transaction inconnue ne fait rien
+  const f2 = cinetpayRepond(verif('ACCEPTED', 2000));
+  const g2 = creerGestionnaire({ depots: fauxDepots().depots, vision: visionOk, config: { ...config, cinetpay }, http: f2.http });
+  const r2 = await g2(new Request('https://x.co/api/cinetpay/notification', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cpm_trans_id: 'CAL1111111111111111' }) }));
+  assert.equal(r2.status, 200);
+  assert.equal(f2.appels.length, 0, 'transaction inconnue : aucun appel');
+
+  // CinetPay teste aussi l'adresse en GET
+  assert.equal((await gerer(new Request('https://x.co/api/cinetpay/notification'))).status, 200);
+});
+
+test('retour de paiement : redirige vers l’app', async () => {
+  const gerer = creerGestionnaire({ depots: fauxDepots().depots, vision: visionOk, config });
+  const r = await gerer(new Request('https://x.co/functions/v1/api/cinetpay/retour?x=1'));
+  assert.equal(r.status, 302);
+  assert.equal(r.headers.get('location'), 'calbasse://premium');
+});
+
 // ——— Appel à RodiumAI ———
 
-function fauxFetch(reponses: { statut: number; corps: object }[]) {
-  const appels: { url: string; headers: Record<string, string>; corps: Record<string, unknown> }[] = [];
-  const http = (async (url: string | URL | Request, init?: RequestInit) => {
-    appels.push({ url: String(url), headers: init?.headers as Record<string, string>, corps: JSON.parse(String(init?.body)) });
-    const r = reponses[Math.min(appels.length - 1, reponses.length - 1)];
-    return new Response(JSON.stringify(r.corps), { status: r.statut, headers: { 'Content-Type': 'application/json' } });
-  }) as typeof fetch;
-  return { http, appels };
-}
 const cfgVision = { cleApi: 'rd_sk_secrete', urlApi: 'https://api.rodiumai.exemple/v1/', modele: 'google/gemini-3.1-flash-lite' };
 const reponseModele = (c: unknown) => ({
   statut: 200,
@@ -268,10 +436,16 @@ test('RodiumAI : si le format JSON strict est refusé, on réessaie sans lui', a
 
 // ——— Garde-fou : le cerveau partagé ne doit pas prendre de retard sur l’app ———
 
-test('la copie des consignes et du catalogue dans la fonction est à jour', () => {
-  for (const f of ['aliments.ts', 'plats.ts', 'vision.ts']) {
-    const source = readFileSync(new URL(`../../../src/lib/${f}`, import.meta.url), 'utf8');
-    const copie = readFileSync(new URL(`../_shared/${f}`, import.meta.url), 'utf8');
-    assert.ok(copie.endsWith(source), `${f} : lance « npm run sync:supabase »`);
+test('les copies de code partagé dans la fonction sont à jour', () => {
+  const copies: [string, string][] = [
+    ['src/lib/aliments.ts', 'supabase/functions/_shared/aliments.ts'],
+    ['src/lib/plats.ts', 'supabase/functions/_shared/plats.ts'],
+    ['src/lib/vision.ts', 'supabase/functions/_shared/vision.ts'],
+    ['server/src/cinetpay.ts', 'supabase/functions/api/cinetpay.ts'],
+  ];
+  for (const [source, copie] of copies) {
+    const a = readFileSync(new URL(`../../../${source}`, import.meta.url), 'utf8');
+    const b = readFileSync(new URL(`../../../${copie}`, import.meta.url), 'utf8');
+    assert.ok(b.endsWith(a), `${copie} : lance « npm run sync:supabase »`);
   }
 });

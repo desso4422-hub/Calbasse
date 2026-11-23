@@ -49,8 +49,8 @@ Pour de vrais utilisateurs, l'app parle à **Supabase** (dossier `supabase/`), j
 
 | Élément | Où | Rôle |
 | --- | --- | --- |
-| `supabase/migrations/` | base de données | scans, corrections, signalements ; quota par personne, plafond global, anti-rafale, un scan en échec ne coûte rien |
-| `supabase/functions/api/` | fonction serveur | `/scan`, `/compte`, `/corrections`, `/signalements`, suppression du compte ; **la clé RodiumAI n'existe que là** |
+| `supabase/migrations/` | base de données | scans, corrections, signalements, forfaits, codes d'activation, paiements ; **1 scan gratuit par jour, 10 avec le forfait** ; plafond global, anti-rafale, un scan en échec ne coûte rien |
+| `supabase/functions/api/` | fonction serveur | `/scan`, `/compte`, `/codes`, `/paiements` (CinetPay), `/corrections`, `/signalements`, suppression du compte ; **la clé RodiumAI n'existe que là** |
 | `supabase/functions/_shared/` | copie | consignes et catalogue d'aliments, copiés depuis `src/lib/` (`npm run sync:supabase`) |
 | `src/services/supabase.ts` | app | compte anonyme + renouvellement du jeton |
 
@@ -58,7 +58,7 @@ Tests, sans aucun compte :
 
 ```bash
 npm test                       # app + mentions légales + garde-fou de diffusion
-npm run test:supabase          # logique de la fonction serveur (22 tests)
+npm run test:supabase          # logique de la fonction serveur (34 tests)
 scripts/tester-base.sh         # base de données sur un PostgreSQL local (quotas, verrouillage)
 RODIUMAI_API_KEY=… node --experimental-strip-types supabase/tests/faux-supabase.ts   # faux Supabase pour essayer l'app
 ```

@@ -13,7 +13,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "A_REMPLIR",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "A_REMPLIR",
-        "EXPO_PUBLIC_CONTACT": "A_REMPLIR"
+        "EXPO_PUBLIC_CONTACT": "A_REMPLIR",
+        "EXPO_PUBLIC_PREMIUM": "1"
       }
     },
     "production": {
@@ -25,7 +26,8 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "A_REMPLIR",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "A_REMPLIR",
-        "EXPO_PUBLIC_CONTACT": "A_REMPLIR"
+        "EXPO_PUBLIC_CONTACT": "A_REMPLIR",
+        "EXPO_PUBLIC_PREMIUM": "1"
       }
     }
   }

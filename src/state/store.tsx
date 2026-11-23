@@ -86,8 +86,8 @@ export type Etat = {
   scansEnAttente?: ScanEnAttente[];
 };
 
-export const SCANS_GRATUITS = 2;
-export const SCANS_PREMIUM = 30;
+export const SCANS_GRATUITS = 1;
+export const SCANS_PREMIUM = 10;
 
 const etatInitial: Etat = {
   version: 1,

@@ -1,17 +1,67 @@
 import { router } from 'expo-router';
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, AppState, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, TextInput, View } from 'react-native';
 import { Logo } from '../components/Graphiques';
 import { Icone } from '../components/Icone';
 import { T } from '../components/T';
 import { Bouton, BoutonRond, Carte, Choix, Ecran, Etiquette, PastilleRadio } from '../components/ui';
-import { serveurConfigure } from '../services/api';
+import { fonctions } from '../config';
+import { lienWhatsApp } from '../lib/contact.ts';
+import { CONTACT } from '../lib/mentions.ts';
 import { depuisCle, formater } from '../lib/nutrition.ts';
-import { demarrerPaiement, ErreurPaiement, modePaiement, suivrePaiement, tarifs } from '../services/paiement';
+import { serveurConfigure, type EtatCompteServeur } from '../services/api';
+import { chargerOffre, demarrerPaiement, ErreurPaiement, modePaiement, suivrePaiement, tarifs as tarifsParDefaut, utiliserCode, type Offre } from '../services/paiement';
 import { estPremium, SCANS_GRATUITS, SCANS_PREMIUM, useStore } from '../state/store';
-import { couleurs } from '../theme';
+import { couleurs, polices } from '../theme';
 
-const avantages = [`${SCANS_PREMIUM} scans photo par jour`, 'Suivi détaillé de tes calories et nutriments', 'Bilan de la semaine chaque dimanche', 'Historique complet de tes repas'];
+const avantagesDe = (scans: number) => [`${scans} scans photo par jour`, 'Suivi détaillé de tes calories et nutriments', 'Bilan de la semaine chaque dimanche', 'Historique complet de tes repas'];
+
+/** Saisie d'un code d'activation : le client paie en Mobile Money, tu lui envoies un code. */
+function SaisieCode({ onActive }: { onActive: (compte: EtatCompteServeur) => void }) {
+  const [code, setCode] = useState('');
+  const [enCours, setEnCours] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+
+  const activer = async () => {
+    setEnCours(true);
+    setMessage(null);
+    try {
+      const compte = await utiliserCode(code);
+      setCode('');
+      onActive(compte);
+    } catch (e) {
+      setMessage(e instanceof ErreurPaiement ? e.message : 'Le code n’a pas pu être vérifié.');
+    } finally {
+      setEnCours(false);
+    }
+  };
+
+  return (
+    <View style={{ gap: 8 }}>
+      <T g={800} taille={15}>
+        J’ai un code d’activation
+      </T>
+      <View style={{ height: 56, borderRadius: 16, borderWidth: 1.5, borderColor: couleurs.traits, backgroundColor: couleurs.blanc, paddingHorizontal: 14, justifyContent: 'center' }}>
+        <TextInput
+          value={code}
+          onChangeText={setCode}
+          placeholder="CAL-XXXX-XXXX-XXXX"
+          placeholderTextColor="#B8A27F"
+          autoCapitalize="characters"
+          autoCorrect={false}
+          accessibilityLabel="Code d’activation"
+          style={{ height: '100%', fontFamily: polices[700], fontSize: 17, color: couleurs.encre }}
+        />
+      </View>
+      {message ? (
+        <T taille={13} interligne={1.4} couleur={couleurs.terreCuite}>
+          {message}
+        </T>
+      ) : null}
+      <Bouton titre="Activer mon code" variante="contour" hauteur={50} onPress={activer} chargement={enCours} desactive={code.trim().length < 10} />
+    </View>
+  );
+}
 
 export default function Premium() {
   const { etat, dispatch } = useStore();
@@ -19,7 +69,20 @@ export default function Premium() {
   const [enCours, setEnCours] = useState(false);
   const [message, setMessage] = useState<string | null>(null);
   const premium = estPremium(etat);
+  // Prix et limites : ceux du serveur s'il répond, sinon les valeurs par défaut
+  const [offre, setOffre] = useState<Offre | null>(null);
+  useEffect(() => {
+    chargerOffre().then(setOffre);
+  }, []);
+  const tarifs = offre?.tarifs ?? tarifsParDefaut;
+  const scansGratuits = offre?.scansGratuits ?? SCANS_GRATUITS;
+  const scansPremium = offre?.scansPremium ?? SCANS_PREMIUM;
+  const avantages = avantagesDe(scansPremium);
   const parMois = Math.round(tarifs.annuel.prix / 12);
+  // Paiement en ligne si le serveur l'a configuré ; sinon : Mobile Money par WhatsApp, puis un code
+  const paiementEnLigne = modePaiement === 'demo' || !!offre?.paiement;
+  const lienPaiement = lienWhatsApp(CONTACT, `Bonjour, je veux le forfait Calbasse ${plan === 'annuel' ? 'annuel' : 'mensuel'} (${formater(tarifs[plan].prix)} FCFA).`);
+  const activerCode = (compte: EtatCompteServeur) => dispatch({ type: 'majCompteServeur', compte });
 
   // Transaction CinetPay en cours de confirmation
   const [transaction, setTransaction] = useState<string | null>(null);
@@ -124,10 +187,11 @@ export default function Premium() {
           Tu es Premium
         </T>
         <T taille={15} interligne={1.5} couleur={couleurs.encre2}>
-          Abonnement {etat.abonnement.plan}, valable jusqu’au {fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}. Sans renouvellement automatique : tu pourras le prolonger depuis cet écran.
+          Abonnement {etat.abonnement.plan}, valable jusqu’au {fin.toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' })}. Sans renouvellement automatique : tu peux le prolonger avec un nouveau code, ou en payant à nouveau.
         </T>
-        <Liste />
-        {serveurConfigure && !etat.serveur?.telephone ? (
+        <Liste avantages={avantages} />
+        {serveurConfigure ? <SaisieCode onActive={activerCode} /> : null}
+        {fonctions.telephone && serveurConfigure && !etat.serveur?.telephone ? (
           <Carte style={{ backgroundColor: couleurs.terreDouce, borderWidth: 0, gap: 10 }}>
             <T g={800} taille={15}>
               Ne perds pas ton abonnement
@@ -152,7 +216,15 @@ export default function Premium() {
               {message}
             </T>
           ) : null}
-          <Bouton titre={`Payer ${formater(tarifs[plan].prix)} FCFA`} onPress={payer} chargement={enCours} />
+          {paiementEnLigne ? (
+            <Bouton titre={`Payer ${formater(tarifs[plan].prix)} FCFA`} onPress={payer} chargement={enCours} />
+          ) : lienPaiement ? (
+            <Bouton titre={`Payer ${formater(tarifs[plan].prix)} FCFA par WhatsApp`} icone="telephone" onPress={() => Linking.openURL(lienPaiement).catch(() => {})} />
+          ) : (
+            <T g={600} taille={13} centre interligne={1.4}>
+              Pour payer en Mobile Money, écris-nous : {CONTACT}
+            </T>
+          )}
           <Bouton variante="lien" titre="Rester en gratuit" onPress={() => router.back()} />
         </>
       }
@@ -167,11 +239,11 @@ export default function Premium() {
           Passe à Premium
         </T>
         <T taille={15} interligne={1.5} couleur={couleurs.encre2}>
-          Scanne tous tes repas, tous les jours. En gratuit, tu as {SCANS_GRATUITS} scans par jour.
+          Scanne tous tes repas, tous les jours. En gratuit, tu as {scansGratuits} scan{scansGratuits > 1 ? 's' : ''} par jour ; avec Premium, {scansPremium}.
         </T>
       </View>
 
-      <Liste />
+      <Liste avantages={avantages} />
 
       <View style={{ gap: 10 }}>
         <Choix actif={plan === 'mensuel'} onPress={() => setPlan('mensuel')} gauche={<PastilleRadio actif={plan === 'mensuel'} />} droite={<Prix montant={tarifs.mensuel.prix} unite="FCFA / mois" />}>
@@ -199,11 +271,13 @@ export default function Premium() {
         </Choix>
       </View>
 
+      {serveurConfigure ? <SaisieCode onActive={activerCode} /> : null}
+
       <View style={{ gap: 8 }}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
           <Icone nom="telephone" taille={18} couleur={couleurs.terreFoncee} />
           <T g={600} taille={13}>
-            Mobile Money ou carte bancaire, via CinetPay
+            {paiementEnLigne ? 'Mobile Money ou carte bancaire, via CinetPay' : 'Mobile Money : tu paies, puis tu reçois ton code par WhatsApp'}
           </T>
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -218,7 +292,7 @@ export default function Premium() {
   );
 }
 
-function Liste() {
+function Liste({ avantages }: { avantages: string[] }) {
   return (
     <View style={{ gap: 12 }}>
       {avantages.map((a) => (

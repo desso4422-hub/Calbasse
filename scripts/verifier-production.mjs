@@ -23,6 +23,7 @@ if (absent(env.EXPO_PUBLIC_SUPABASE_ANON_KEY) || env.EXPO_PUBLIC_SUPABASE_ANON_K
   probleme.push("EXPO_PUBLIC_SUPABASE_ANON_KEY doit être la clé publique du projet (« anon » ou « publishable »)");
 if (absent(env.EXPO_PUBLIC_CONTACT))
   probleme.push("EXPO_PUBLIC_CONTACT doit être ton e-mail ou ton numéro WhatsApp : il apparaît dans la politique de confidentialité");
+if (env.EXPO_PUBLIC_PREMIUM !== '1') probleme.push("EXPO_PUBLIC_PREMIUM doit valoir 1 : sans lui, le forfait payant (10 scans par jour) n'apparaît pas dans l'app");
 if (env.EXPO_PUBLIC_DEMO === '1') probleme.push('EXPO_PUBLIC_DEMO=1 allume les outils de démonstration : à retirer');
 if (env.EXPO_PUBLIC_VISION_DIRECTE === '1' || env.EXPO_PUBLIC_RODIUMAI_API_KEY)
   probleme.push("La reconnaissance intégrée (ou une clé RodiumAI) ne doit pas être dans l'app : la clé reste sur le serveur");

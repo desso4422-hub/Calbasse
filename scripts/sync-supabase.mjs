@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * Copie le « cerveau » de la reconnaissance (consignes, catalogue d'aliments, validation) dans la
- * fonction Supabase : l'app et le serveur utilisent exactement les mêmes fichiers.
+ * Copie dans la fonction Supabase le code qu'elle partage avec l'app (consignes, catalogue d'aliments,
+ * validation) et avec le serveur Node (client CinetPay) : tous utilisent exactement les mêmes fichiers.
  *
- *   node scripts/sync-supabase.mjs             copie src/lib/{aliments,plats,vision}.ts
+ *   node scripts/sync-supabase.mjs             copie les fichiers partagés
  *   node scripts/sync-supabase.mjs --verifier  échoue si la copie a pris du retard (utilisé par les tests)
  */
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -11,15 +11,21 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const racine = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const FICHIERS = ['aliments.ts', 'plats.ts', 'vision.ts'];
-const dest = path.join(racine, 'supabase/functions/_shared');
-const entete = (f) => `// FICHIER GÉNÉRÉ : ne pas modifier ici.\n// Source : src/lib/${f}. Pour le mettre à jour : npm run sync:supabase\n\n`;
+// [source, copie] : l'app et le serveur Node partagent leur code avec la fonction Supabase
+export const COPIES = [
+  ['src/lib/aliments.ts', 'supabase/functions/_shared/aliments.ts'],
+  ['src/lib/plats.ts', 'supabase/functions/_shared/plats.ts'],
+  ['src/lib/vision.ts', 'supabase/functions/_shared/vision.ts'],
+  ['server/src/cinetpay.ts', 'supabase/functions/api/cinetpay.ts'],
+];
+const entete = (source) => `// FICHIER GÉNÉRÉ : ne pas modifier ici.\n// Source : ${source}. Pour le mettre à jour : npm run sync:supabase\n\n`;
 
 let ecart = false;
-mkdirSync(dest, { recursive: true });
-for (const f of FICHIERS) {
-  const voulu = entete(f) + readFileSync(path.join(racine, 'src/lib', f), 'utf8');
-  const cible = path.join(dest, f);
+for (const [source, copie] of COPIES) {
+  const f = path.basename(copie);
+  const voulu = entete(source) + readFileSync(path.join(racine, source), 'utf8');
+  const cible = path.join(racine, copie);
+  mkdirSync(path.dirname(cible), { recursive: true });
   if (process.argv.includes('--verifier')) {
     if (!existsSync(cible) || readFileSync(cible, 'utf8') !== voulu) {
       console.error(`${f} : la copie Supabase n'est pas à jour. Lance : npm run sync:supabase`);
@@ -27,7 +33,7 @@ for (const f of FICHIERS) {
     }
   } else {
     writeFileSync(cible, voulu);
-    console.log(`copié : ${f}`);
+    console.log(`copié : ${copie}`);
   }
 }
 process.exit(ecart ? 1 : 0);
