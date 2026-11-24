@@ -1,0 +1,21 @@
+// Signe l'APK de diffusion avec la clé permanente de Calbasse (script d'initialisation Gradle).
+// Variables : CALBASSE_KEYSTORE (chemin du fichier), CALBASSE_KEYSTORE_MDP, CALBASSE_KEY_ALIAS (calbasse par défaut).
+// Sans elles, la construction échoue : on ne diffuse jamais un APK signé avec la clé de débogage.
+allprojects { p ->
+  p.afterEvaluate {
+    if (p.plugins.hasPlugin('com.android.application')) {
+      def fichier = System.getenv('CALBASSE_KEYSTORE')
+      def mdp = System.getenv('CALBASSE_KEYSTORE_MDP')
+      if (!fichier || !mdp || !new File(fichier).exists()) {
+        throw new GradleException('Signature : définis CALBASSE_KEYSTORE (fichier existant) et CALBASSE_KEYSTORE_MDP.')
+      }
+      p.android.signingConfigs.create('calbasseRelease') {
+        storeFile new File(fichier)
+        storePassword mdp
+        keyAlias System.getenv('CALBASSE_KEY_ALIAS') ?: 'calbasse'
+        keyPassword mdp
+      }
+      p.android.buildTypes.release.signingConfig = p.android.signingConfigs.calbasseRelease
+    }
+  }
+}

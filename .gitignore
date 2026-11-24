@@ -51,3 +51,6 @@ netlify/fonctions/
 marketing/montage/rushs/
 marketing/montage/*.mp4
 marketing/montage/__pycache__/
+apk/
+*.keystore
+!android/app/debug.keystore
