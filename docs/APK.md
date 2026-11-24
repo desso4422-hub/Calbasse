@@ -1,28 +1,26 @@
-# Fabriquer et diffuser l'APK de Calbasse
+# Fabriquer, diffuser et mettre à jour l'APK de Calbasse (Expo / EAS)
 
-## La clé de signature : à ne JAMAIS perdre
+Projet Expo : https://expo.dev/accounts/desso4422s-team/projects/calbasse (canal de mises à jour : `testeurs`).
 
-Chaque APK est signé avec un fichier `calbasse-release.keystore` (et son mot de passe). Android n'accepte une mise à jour que si elle est signée avec **la même clé** que la version déjà installée. Si tu perds ce fichier, tes utilisateurs devront désinstaller Calbasse (et perdront leurs données locales) pour installer la suite.
+## Fabriquer un nouvel APK
 
-- Garde 3 copies : ton téléphone, ton e-mail, un cloud (Drive). Garde le mot de passe à part.
-- Ne le mets jamais dans GitHub (déjà interdit par `.gitignore`).
-
-## Construire
+Nécessaire seulement pour la première diffusion, ou quand on change du natif (nouvelle permission, nouveau module) ou la `version` de `app.json`.
 
 ```bash
-CALBASSE_KEYSTORE=/chemin/calbasse-release.keystore CALBASSE_KEYSTORE_MDP='…' scripts/construire-apk.sh
+npx eas-cli@latest build --platform android --profile testeurs
 ```
 
-Le script lit les réglages dans `eas.json` (profil `testeurs`), refuse de continuer s'il en manque (`npm run verifier:production`), puis produit dans `apk/` :
+Les réglages de l'app (adresse Supabase, clé publique, contact) viennent d'`eas.json`. `EXPO_PUBLIC_CONTACT: "aucun"` = version de test sans contact public (refusée pour le profil `production` : il faut alors un vrai contact). Expo garde la clé de signature : ne la perds pas de vue en changeant de compte Expo.
 
-- `calbasse-<version>-arm64.apk` : tous les téléphones récents (≈ 40 Mo) ;
-- `calbasse-<version>-arm32.apk` : les vieux téléphones (≈ 30 Mo).
+Le lien de téléchargement apparaît sur la page de la construction (expo.dev, onglet Builds). Envoie-le sur WhatsApp.
 
-Pour une nouvelle version : augmente `version` et `android.versionCode` dans `app.json` (versionCode +1 à chaque diffusion), puis relance.
+## Mises à jour automatiques (sans réinstaller)
 
-## Diffuser
+```bash
+scripts/publier-maj.sh "ce qui change"
+```
 
-Supabase → **Storage → New bucket** : nom `apk`, coche **Public**. Envoie les deux fichiers : chacun a un lien public à partager sur WhatsApp. (La limite gratuite est de 50 Mo par fichier : les deux APK la respectent.)
+Les téléphones reçoivent la mise à jour à leur prochain lancement (parfois au 2e). Elle ne change que le code et les images, pour la même `version` de l'app. Toujours passer par ce script : il applique les mêmes réglages qu'à la construction ; une mise à jour publiée sans eux casserait l'app.
 
 ## Installer (message à envoyer aux testeurs)
 
@@ -30,6 +28,6 @@ Supabase → **Storage → New bucket** : nom `apk`, coche **Public**. Envoie le
 2. Ouvre-le. Android demande d'autoriser l'installation depuis ce navigateur : accepte.
 3. Si « Google Play Protect » avertit que l'app n'est pas connue : « Installer quand même ».
 
-## Mises à jour
+## Variante sans Expo (construction sur un ordinateur)
 
-Pour l'instant, une mise à jour = un nouvel APK à installer par-dessus (les données restent). Les mises à jour automatiques sans réinstaller demandent un compte Expo (EAS Update) : à brancher plus tard.
+`scripts/construire-apk.sh` construit un APK signé avec une clé à soi (`CALBASSE_KEYSTORE`, `CALBASSE_KEYSTORE_MDP`). Un APK signé ainsi ne peut pas recevoir les mises à jour d'un APK construit par Expo, et inversement.
