@@ -7,7 +7,7 @@ import { T } from '../components/T';
 import { Bouton, BoutonRond, Carte, Choix, Ecran, Etiquette, PastilleRadio } from '../components/ui';
 import { fonctions } from '../config';
 import { lienWhatsApp } from '../lib/contact.ts';
-import { CONTACT } from '../lib/mentions.ts';
+import { CONTACT, ECRIRE } from '../lib/mentions.ts';
 import { depuisCle, formater } from '../lib/nutrition.ts';
 import { serveurConfigure, type EtatCompteServeur } from '../services/api';
 import { chargerOffre, demarrerPaiement, ErreurPaiement, modePaiement, suivrePaiement, tarifs as tarifsParDefaut, utiliserCode, type Offre } from '../services/paiement';
@@ -223,7 +223,7 @@ export default function Premium() {
             <Bouton titre={`Payer ${formater(tarifs[plan].prix)} FCFA par WhatsApp`} icone="telephone" onPress={() => Linking.openURL(lienPaiement).catch(() => {})} />
           ) : (
             <T g={600} taille={13} centre interligne={1.4}>
-              Pour payer en Mobile Money, écris-nous : {CONTACT}
+              Pour payer en Mobile Money, {ECRIRE}.
             </T>
           )}
           <Bouton variante="lien" titre="Rester en gratuit" onPress={() => router.back()} />

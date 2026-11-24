@@ -21,7 +21,9 @@ if (absent(env.EXPO_PUBLIC_SUPABASE_URL) || !/^https:\/\/[a-z0-9-]+\.supabase\.c
   probleme.push("EXPO_PUBLIC_SUPABASE_URL doit être l'adresse du projet, par exemple https://abcdefgh.supabase.co");
 if (absent(env.EXPO_PUBLIC_SUPABASE_ANON_KEY) || env.EXPO_PUBLIC_SUPABASE_ANON_KEY.length < 20)
   probleme.push("EXPO_PUBLIC_SUPABASE_ANON_KEY doit être la clé publique du projet (« anon » ou « publishable »)");
-if (absent(env.EXPO_PUBLIC_CONTACT))
+// « aucun » : version de test donnée à des proches, sans contact public (jamais pour la diffusion « production »)
+const sansContactAutorise = profil === 'testeurs' && env.EXPO_PUBLIC_CONTACT === 'aucun';
+if (absent(env.EXPO_PUBLIC_CONTACT) || (env.EXPO_PUBLIC_CONTACT === 'aucun' && !sansContactAutorise))
   probleme.push("EXPO_PUBLIC_CONTACT doit être ton e-mail ou ton numéro WhatsApp : il apparaît dans la politique de confidentialité");
 if (env.EXPO_PUBLIC_PREMIUM !== '1') probleme.push("EXPO_PUBLIC_PREMIUM doit valoir 1 : sans lui, le forfait payant (10 scans par jour) n'apparaît pas dans l'app");
 if (env.EXPO_PUBLIC_DEMO === '1') probleme.push('EXPO_PUBLIC_DEMO=1 allume les outils de démonstration : à retirer');

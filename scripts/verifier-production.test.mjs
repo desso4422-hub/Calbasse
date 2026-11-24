@@ -41,3 +41,9 @@ test('sur EAS, les profils de développement ne sont pas contrôlés, ceux des u
   assert.equal(lancer({ EAS_BUILD_PROFILE: 'testeurs' }).status, 1);
   assert.equal(lancer({ EAS_BUILD_PROFILE: 'production', ...BONNE }).status, 0);
 });
+
+test('« aucun » comme contact : accepté pour la version de test, refusé pour la diffusion', () => {
+  assert.equal(lancer({ ...BONNE, EAS_BUILD_PROFILE: 'testeurs', EXPO_PUBLIC_CONTACT: 'aucun' }).status, 0);
+  assert.equal(lancer({ ...BONNE, EAS_BUILD_PROFILE: 'production', EXPO_PUBLIC_CONTACT: 'aucun' }).status, 1);
+  assert.equal(lancer({ ...BONNE, EXPO_PUBLIC_CONTACT: 'aucun' }).status, 1);
+});

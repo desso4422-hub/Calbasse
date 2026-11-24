@@ -17,13 +17,19 @@ export const MISE_A_JOUR = '23 novembre 2026';
  */
 export const CONTACT = process.env.EXPO_PUBLIC_CONTACT?.trim() || '[À COMPLÉTER : e-mail ou numéro WhatsApp de contact]';
 
+/** Version de test sans contact public (EXPO_PUBLIC_CONTACT=aucun) : on renvoie vers la personne qui a donné l'app. */
+export const SANS_CONTACT = CONTACT.toLowerCase() === 'aucun';
+
+/** « écris-nous : … » ou, sans contact public, « écris à la personne qui t'a donné l'application » */
+export const ECRIRE = SANS_CONTACT ? 'écris à la personne qui t’a donné l’application' : `écris-nous : ${CONTACT}`;
+
 export type Section = { titre: string; paragraphes: string[] };
 
 export const confidentialite: Section[] = [
   {
     titre: 'Qui est responsable',
     paragraphes: [
-      `Calbasse est une application de suivi nutritionnel pour l’Afrique de l’Ouest et du Centre. Pour toute question sur tes données : ${CONTACT}.`,
+      `Calbasse est une application de suivi nutritionnel pour l’Afrique de l’Ouest et du Centre. Pour toute question sur tes données, ${ECRIRE}.`,
     ],
   },
   {
@@ -61,7 +67,7 @@ export const confidentialite: Section[] = [
   {
     titre: 'Tes droits',
     paragraphes: [
-      `Tu peux tout supprimer à tout moment : Profil, puis « Effacer mes données ». Cela supprime ton compte en ligne, ta sauvegarde et les données de ton téléphone. Pour toute autre demande (accès, correction), écris-nous : ${CONTACT}.`,
+      `Tu peux tout supprimer à tout moment : Profil, puis « Effacer mes données ». Cela supprime ton compte en ligne, ta sauvegarde et les données de ton téléphone. Pour toute autre demande (accès, correction), ${ECRIRE}.`,
     ],
   },
   {

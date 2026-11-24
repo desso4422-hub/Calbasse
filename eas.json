@@ -13,7 +13,7 @@
       "env": {
         "EXPO_PUBLIC_SUPABASE_URL": "https://eswduezpawevggnvbpfy.supabase.co",
         "EXPO_PUBLIC_SUPABASE_ANON_KEY": "sb_publishable_dHZesj03rjSPf1_jio9aQA_W252m5oV",
-        "EXPO_PUBLIC_CONTACT": "A_REMPLIR",
+        "EXPO_PUBLIC_CONTACT": "aucun",
         "EXPO_PUBLIC_PREMIUM": "1"
       }
     },

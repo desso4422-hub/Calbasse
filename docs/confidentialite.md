@@ -6,7 +6,7 @@
 
 ## Qui est responsable
 
-Calbasse est une application de suivi nutritionnel pour l’Afrique de l’Ouest et du Centre. Pour toute question sur tes données : [À COMPLÉTER : e-mail ou numéro WhatsApp de contact].
+Calbasse est une application de suivi nutritionnel pour l’Afrique de l’Ouest et du Centre. Pour toute question sur tes données, écris-nous : [À COMPLÉTER : e-mail ou numéro WhatsApp de contact].
 
 ## Ce que tu nous confies
 
