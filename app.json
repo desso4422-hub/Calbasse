@@ -71,6 +71,15 @@
     },
     "runtimeVersion": {
       "policy": "appVersion"
+    },
+    "owner": "desso4422s-team",
+    "extra": {
+      "eas": {
+        "projectId": "8b7ebdf9-c0f6-4445-8be4-13fee51b537d"
+      }
+    },
+    "updates": {
+      "url": "https://u.expo.dev/8b7ebdf9-c0f6-4445-8be4-13fee51b537d"
     }
   }
 }
