@@ -1,10 +1,10 @@
 {
-  "sortie": "calbasse-prise-de-masse-v1.mp4",
+  "sortie": "calbasse-prise-de-masse-v2.mp4",
   "police_dossier": "police",
   "temp": "/tmp/claude-0/-home-user-Calbasse/f8ce0a80-532c-5a90-811b-6edf5f24d622/scratchpad/montage_tmp2",
-  "cadence_syllabes_par_s": 6.5,
-  "vitesse_min": 0.9,
-  "vitesse_max": 1.5,
+  "cadence_syllabes_par_s": 6.0,
+  "vitesse_min": 0.8,
+  "vitesse_max": 1.65,
   "vitesse_pause": 1.8,
   "cible_morceau_lufs": -21.0,
   "crf": 20,
@@ -51,7 +51,7 @@
       "ugc": 1,
       "fichier": "rushs/prise-ugc1-partie2.mp4",
       "debut": 0.0,
-      "fin": 7.62,
+      "fin": 7.93,
       "texte": "Mon problème, c'est que je ne savais pas combien je mangeais vraiment. Il y a une app qui compte pour toi, avec une simple photo.",
       "animations": [
         {
@@ -77,7 +77,7 @@
     {
       "ugc": 2,
       "fichier": "rushs/prise-ugc2-partie1.mp4",
-      "debut": 0.2,
+      "debut": 0.0,
       "fin": 7.93,
       "texte": "Moi, depuis le lycée, on m'appelait planche. Je mangeais mon eru, mes beignets, rien ne venait.",
       "animations": [
@@ -102,14 +102,14 @@
     {
       "ugc": 2,
       "fichier": "rushs/prise-ugc2-partie2.mp4",
-      "debut": 0.0,
+      "debut": 0.62,
       "fin": 7.93,
       "zoom_force": {
-        "de": 4.45,
-        "a": 7.93,
-        "niveau": 1.22
+        "de": 1.85,
+        "a": 6.8,
+        "niveau": 1.18
       },
-      "texte": "Avec Calbasse, je photographie chaque plat, j'ai vu que je mangeais à peine la moitié de ce qu'il me fallait. J'ai ajouté deux repas, et aujourd'hui on me demande mon secret.",
+      "texte": "Je photographie chaque plat, j'ai vu que je mangeais à peine la moitié de ce qu'il me fallait. J'ai ajouté deux repas, et aujourd'hui on me demande mon secret.",
       "animations": [
         {
           "type": "viseur",
@@ -172,7 +172,7 @@
       "fichier": "rushs/prise-ugc3-partie2.mp4",
       "debut": 0.0,
       "fin": 7.93,
-      "texte": "En fait, c'était les protéines. ~serre Je photographie mon garba, l'app me dit ce qu'il y a dedans. J'ai corrigé mes repas, et mes bras remplissent enfin mes manches.",
+      "texte": "En fait, c'était les protéines. ~sains Je photographie mon garba, l'app me dit ce qu'il y a dedans. J'ai corrigé mes repas, et mes bras remplissent enfin mes manches.",
       "animations": [
         {
           "type": "pastille",
