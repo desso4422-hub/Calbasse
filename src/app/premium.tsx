@@ -6,6 +6,7 @@ import { Icone } from '../components/Icone';
 import { T } from '../components/T';
 import { Bouton, BoutonRond, Carte, Choix, Ecran, Etiquette, PastilleRadio } from '../components/ui';
 import { fonctions } from '../config';
+import { codeComplet, formaterCode } from '../lib/code.ts';
 import { lienWhatsApp } from '../lib/contact.ts';
 import { CONTACT, ECRIRE } from '../lib/mentions.ts';
 import { depuisCle, formater } from '../lib/nutrition.ts';
@@ -44,11 +45,12 @@ function SaisieCode({ onActive }: { onActive: (compte: EtatCompteServeur) => voi
       <View style={{ height: 56, borderRadius: 16, borderWidth: 1.5, borderColor: couleurs.traits, backgroundColor: couleurs.blanc, paddingHorizontal: 14, justifyContent: 'center' }}>
         <TextInput
           value={code}
-          onChangeText={setCode}
+          onChangeText={(t) => setCode(formaterCode(t))}
           placeholder="CAL-XXXX-XXXX-XXXX"
           placeholderTextColor="#B8A27F"
           autoCapitalize="characters"
           autoCorrect={false}
+          maxLength={19}
           accessibilityLabel="Code d’activation"
           style={{ height: '100%', fontFamily: polices[700], fontSize: 17, color: couleurs.encre }}
         />
@@ -58,7 +60,7 @@ function SaisieCode({ onActive }: { onActive: (compte: EtatCompteServeur) => voi
           {message}
         </T>
       ) : null}
-      <Bouton titre="Activer mon code" variante="contour" hauteur={50} onPress={activer} chargement={enCours} desactive={code.trim().length < 10} />
+      <Bouton titre="Activer mon code" variante="contour" hauteur={50} onPress={activer} chargement={enCours} desactive={!codeComplet(code)} />
     </View>
   );
 }

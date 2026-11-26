@@ -10,6 +10,7 @@
 import * as WebBrowser from 'expo-web-browser';
 import { ajouterJours, cleJour } from '../lib/nutrition.ts';
 import type { Abonnement } from '../state/store';
+import { formaterCode } from '../lib/code.ts';
 import { appelApi, ErreurApi, serveurConfigure, type EtatCompteServeur } from './api';
 
 export const tarifs = {
@@ -84,7 +85,7 @@ export async function chargerOffre(): Promise<Offre | null> {
 /** Active le forfait avec un code d'activation reçu après un paiement Mobile Money. */
 export async function utiliserCode(code: string): Promise<EtatCompteServeur> {
   try {
-    const r = await appelApi('/codes', { methode: 'POST', corps: { code } });
+    const r = await appelApi('/codes', { methode: 'POST', corps: { code: formaterCode(code) } });
     return r.compte as EtatCompteServeur;
   } catch (e) {
     throw new ErreurPaiement(e instanceof ErreurApi ? e.message : 'Le code n’a pas pu être vérifié. Vérifie ta connexion et réessaie.');
