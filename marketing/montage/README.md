@@ -39,8 +39,18 @@ Il faut `ffmpeg` et les paquets Python `numpy`, `Pillow` et `opencv-python-headl
 
 Chaque clip est découpé en tranches de voix et de pauses. On mesure sa **cadence** (syllabes par seconde
 de voix, pauses exclues) et on calcule la vitesse qui le ramène à la cadence cible
-(`cadence_syllabes_par_s`, 6,1 par défaut), dans une fourchette de 0,95× à 1,35×. Les pauses sont
-accélérées 3 fois. Résultat : tous les clips parlent au même rythme, et la vidéo est plus courte.
+(`cadence_syllabes_par_s`, 6,1 par défaut), dans une fourchette de 0,90× à 1,50×. Les pauses sont
+accélérées 1,8 fois. Résultat : tous les clips parlent au même rythme, et la vidéo est plus courte.
+
+Deux réglages évitent les à-coups de rythme, le défaut le plus visible de la première version :
+
+- **La fourchette doit être assez large** pour qu'aucun clip ne la touche. Un clip qui plafonne à
+  `vitesse_max` reste plus lent que les autres : on l'entend tout de suite quand c'est la 2ᵉ partie
+  du même avatar. Le tableau affiché à la fin du montage donne la cadence de sortie de chaque clip :
+  **elles doivent toutes être à peu près égales**. Si l'une décroche, élargir la fourchette, ou
+  mieux, régénérer le rush avec les consignes de débit de la fiche de la créative.
+- **`vitesse_pause` doit rester basse.** Pendant une pause, l'image accélère elle aussi : à 3×, on
+  voyait la personne faire un bond. 1,8 raccourcit les silences sans que ça se remarque.
 
 La même carte de temps sert à la voix, à l'image et aux sous-titres, donc tout reste synchrone.
 

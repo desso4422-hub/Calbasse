@@ -24,6 +24,11 @@ cible ne peut pas répondre non.
 Femme ivoirienne, 32 ans, mince et en forme, visage soigné, débardeur uni.
 Décor : cuisine claire et rangée, lumière du jour.
 
+**Voix** : voix de femme ivoirienne de 32 ans, timbre clair placé dans le médium, accent
+d'Abidjan, ton chaleureux et direct, comme une amie qui te parle en face. Débit
+régulier, environ 3 mots par seconde — le même pour les quatre avatars, pour que la
+publicité garde un seul rythme.
+
 **Prompt Gemini — à copier**
 ```
 Génère une image ultra réaliste, format 9:16 vertical, d'une femme ivoirienne de 32 ans,
@@ -47,10 +52,25 @@ On te dit de compter les calories, mais dans ces applications-là y a pas l'atti
 
 **Prompt Flow — partie 1**
 ```
-Cette dame doit dire : "Tu veux maigrir mais tu manges africain tous les jours ? Moi
-c'était ça mon problème. On te dit de compter les calories, mais dans ces applications-là
-y a pas l'attiéké poisson." Elle doit faire des mouvements des mains pour illustrer ses
-propos.
+Elle se filme avec son téléphone et dit, mot pour mot, sans rien ajouter :
+"Tu veux maigrir mais tu manges africain tous les jours ? Moi c'était ça mon problème.
+On te dit de compter les calories, mais dans ces applications-là y a pas l'attiéké
+poisson."
+
+VOIX — à garder identique dans les deux parties de cet avatar : voix de femme ivoirienne
+de 32 ans, timbre clair placé dans le médium, accent d'Abidjan, ton chaleureux et
+direct, comme une amie qui te parle en face.
+
+DÉBIT — régulier du début à la fin, environ 3 mots par seconde. Aucune accélération,
+aucun ralentissement, aucune pause de plus d'une demi-seconde. Elle commence à parler
+dès la première image et termine sa phrase avant la dernière : pas de silence au début,
+pas de silence à la fin.
+
+JEU — Elle doit faire des mouvements des mains pour illustrer ses propos. Même énergie,
+même volume et même distance au visage du début à la fin.
+
+INTERDIT — musique, bruit de fond, deuxième voix, sous-titres ou texte incrusté à
+l'image, changement de plan, de décor ou de vêtement.
 ```
 
 ### Partie 2
@@ -58,9 +78,26 @@ propos.
 
 **Prompt Flow — partie 2** (fonction « Prolonger »)
 ```
-Cette dame doit dire : "J'ai trouvé une app qui connaît nos plats. Tu photographies ton
-assiette, et elle te dit tout." Elle doit faire des mouvements des mains pour illustrer
-ses propos.
+Prolonge exactement la même vidéo, sans coupure et sans changer de plan. La même
+personne continue et dit, mot pour mot, sans rien ajouter :
+"J'ai trouvé une app qui connaît nos plats. Tu photographies ton assiette, et elle te
+dit tout."
+
+VOIX — exactement la même que dans la partie précédente, ne pas en changer, ni le
+timbre, ni la hauteur, ni l'accent : voix de femme ivoirienne de 32 ans, timbre clair
+placé dans le médium, accent d'Abidjan, ton chaleureux et direct, comme une amie qui te
+parle en face.
+
+DÉBIT — exactement le même que dans la partie précédente : régulier, environ 3 mots par
+seconde, aucune accélération, aucun ralentissement, aucune pause de plus d'une
+demi-seconde. Elle enchaîne tout de suite, sans silence au début, et termine sa phrase
+avant la dernière image.
+
+JEU — Elle doit faire des mouvements des mains pour illustrer ses propos. Même énergie,
+même volume et même distance au visage que dans la partie 1.
+
+INTERDIT — musique, bruit de fond, deuxième voix, sous-titres ou texte incrusté à
+l'image, changement de plan, de décor ou de vêtement.
 ```
 
 ---
@@ -73,6 +110,11 @@ Profil : un homme qui se trompait de coupable.
 ### Avatar 2
 Homme béninois, 38 ans, silhouette nette, chemise propre à manches courtes.
 Décor : petit bureau ou boutique bien tenue.
+
+**Voix** : voix d'homme béninois de 38 ans, timbre grave et posé, accent de Cotonou, ton
+calme et assuré, celui d'un commerçant qui raconte son histoire. Débit régulier, environ
+3 mots par seconde — le même pour les quatre avatars, pour que la publicité garde un
+seul rythme.
 
 **Prompt Gemini — à copier**
 ```
@@ -96,9 +138,24 @@ le soir sans savoir ce que ça pèse. »
 
 **Prompt Flow — partie 1**
 ```
-Ce monsieur doit dire : "Franchement moi je pensais que c'est le riz qui me gonflait. Je
-mangeais ma pâte rouge le soir sans savoir ce que ça pèse." Il doit faire des mouvements
-des mains pour illustrer ses propos.
+Il se filme avec son téléphone et dit, mot pour mot, sans rien ajouter :
+"Franchement moi je pensais que c'est le riz qui me gonflait. Je mangeais ma pâte rouge
+le soir sans savoir ce que ça pèse."
+
+VOIX — à garder identique dans les deux parties de cet avatar : voix d'homme béninois de
+38 ans, timbre grave et posé, accent de Cotonou, ton calme et assuré, celui d'un
+commerçant qui raconte son histoire.
+
+DÉBIT — régulier du début à la fin, environ 3 mots par seconde. Aucune accélération,
+aucun ralentissement, aucune pause de plus d'une demi-seconde. Il commence à parler dès
+la première image et termine sa phrase avant la dernière : pas de silence au début, pas
+de silence à la fin.
+
+JEU — Il doit faire des mouvements des mains pour illustrer ses propos. Même énergie,
+même volume et même distance au visage du début à la fin.
+
+INTERDIT — musique, bruit de fond, deuxième voix, sous-titres ou texte incrusté à
+l'image, changement de plan, de décor ou de vêtement.
 ```
 
 ### Partie 2
@@ -107,9 +164,26 @@ c'est l'huile et les sucreries. Aujourd'hui mon pantalon ferme. »
 
 **Prompt Flow — partie 2** (fonction « Prolonger »)
 ```
-Ce monsieur doit dire : "Un ami m'a montré Calbasse, je prends juste la photo. Là j'ai vu
-que le vrai problème c'est l'huile et les sucreries. Aujourd'hui mon pantalon ferme." Il
-doit faire des mouvements des mains pour illustrer ses propos.
+Prolonge exactement la même vidéo, sans coupure et sans changer de plan. La même
+personne continue et dit, mot pour mot, sans rien ajouter :
+"Un ami m'a montré Calbasse, je prends juste la photo. Là j'ai vu que le vrai problème
+c'est l'huile et les sucreries. Aujourd'hui mon pantalon ferme."
+
+VOIX — exactement la même que dans la partie précédente, ne pas en changer, ni le
+timbre, ni la hauteur, ni l'accent : voix d'homme béninois de 38 ans, timbre grave et
+posé, accent de Cotonou, ton calme et assuré, celui d'un commerçant qui raconte son
+histoire.
+
+DÉBIT — exactement le même que dans la partie précédente : régulier, environ 3 mots par
+seconde, aucune accélération, aucun ralentissement, aucune pause de plus d'une
+demi-seconde. Il enchaîne tout de suite, sans silence au début, et termine sa phrase
+avant la dernière image.
+
+JEU — Il doit faire des mouvements des mains pour illustrer ses propos. Même énergie,
+même volume et même distance au visage que dans la partie 1.
+
+INTERDIT — musique, bruit de fond, deuxième voix, sous-titres ou texte incrusté à
+l'image, changement de plan, de décor ou de vêtement.
 ```
 
 ---
@@ -128,6 +202,11 @@ régimes privatifs.
 ### Avatar 3
 Femme sénégalaise, 45 ans, élégante et assurée, boubou léger, foulard assorti.
 Décor : salon dakarois soigné.
+
+**Voix** : voix de femme sénégalaise de 45 ans, timbre ample légèrement grave, accent de
+Dakar, ton doux et sûr de lui, celui d'une femme qui sait de quoi elle parle. Débit
+régulier, environ 3 mots par seconde — le même pour les quatre avatars, pour que la
+publicité garde un seul rythme.
 
 **Prompt Gemini — à copier**
 ```
@@ -152,9 +231,24 @@ suis sénégalaise quand même. »
 
 **Prompt Flow — partie 1**
 ```
-Cette dame doit dire : "Moi j'ai essayé les régimes où tu dois laisser le riz. Trois jours
-et j'abandonne, je suis sénégalaise quand même." Elle doit faire des mouvements des mains
-pour illustrer ses propos.
+Elle se filme avec son téléphone et dit, mot pour mot, sans rien ajouter :
+"Moi j'ai essayé les régimes où tu dois laisser le riz. Trois jours et j'abandonne, je
+suis sénégalaise quand même."
+
+VOIX — à garder identique dans les deux parties de cet avatar : voix de femme
+sénégalaise de 45 ans, timbre ample légèrement grave, accent de Dakar, ton doux et sûr
+de lui, celui d'une femme qui sait de quoi elle parle.
+
+DÉBIT — régulier du début à la fin, environ 3 mots par seconde. Aucune accélération,
+aucun ralentissement, aucune pause de plus d'une demi-seconde. Elle commence à parler
+dès la première image et termine sa phrase avant la dernière : pas de silence au début,
+pas de silence à la fin.
+
+JEU — Elle doit faire des mouvements des mains pour illustrer ses propos. Même énergie,
+même volume et même distance au visage du début à la fin.
+
+INTERDIT — musique, bruit de fond, deuxième voix, sous-titres ou texte incrusté à
+l'image, changement de plan, de décor ou de vêtement.
 ```
 
 ### Partie 2
@@ -163,9 +257,26 @@ j'aime, je réduis juste un peu. Six semaines après, mes habits me vont mieux. 
 
 **Prompt Flow — partie 2** (fonction « Prolonger »)
 ```
-Cette dame doit dire : "Avec Calbasse je photographie mon thiéboudienne et je vois la
-portion. Je mange ce que j'aime, je réduis juste un peu. Six semaines après, mes habits me
-vont mieux." Elle doit faire des mouvements des mains pour illustrer ses propos.
+Prolonge exactement la même vidéo, sans coupure et sans changer de plan. La même
+personne continue et dit, mot pour mot, sans rien ajouter :
+"Avec Calbasse je photographie mon thiéboudienne et je vois la portion. Je mange ce que
+j'aime, je réduis juste un peu. Six semaines après, mes habits me vont mieux."
+
+VOIX — exactement la même que dans la partie précédente, ne pas en changer, ni le
+timbre, ni la hauteur, ni l'accent : voix de femme sénégalaise de 45 ans, timbre ample
+légèrement grave, accent de Dakar, ton doux et sûr de lui, celui d'une femme qui sait de
+quoi elle parle.
+
+DÉBIT — exactement le même que dans la partie précédente : régulier, environ 3 mots par
+seconde, aucune accélération, aucun ralentissement, aucune pause de plus d'une
+demi-seconde. Elle enchaîne tout de suite, sans silence au début, et termine sa phrase
+avant la dernière image.
+
+JEU — Elle doit faire des mouvements des mains pour illustrer ses propos. Même énergie,
+même volume et même distance au visage que dans la partie 1.
+
+INTERDIT — musique, bruit de fond, deuxième voix, sous-titres ou texte incrusté à
+l'image, changement de plan, de décor ou de vêtement.
 ```
 
 ---
@@ -177,6 +288,10 @@ Rappel de la douleur → action claire → rappel de la transformation.
 ### Avatar 4
 Homme camerounais, 30 ans, allure sportive et saine, tee-shirt sobre.
 Décor : salon lumineux ou terrasse.
+
+**Voix** : voix d'homme camerounais de 30 ans, timbre médium et franc, accent de Douala,
+ton énergique et amical, sans jamais crier. Débit régulier, environ 3 mots par seconde —
+le même pour les quatre avatars, pour que la publicité garde un seul rythme.
 
 **Prompt Gemini — à copier**
 ```
@@ -200,9 +315,25 @@ WhatsApp. Le bouton est juste en bas. »
 
 **Prompt Flow — partie 1**
 ```
-Ce monsieur doit dire : "Si tu es fatigué de vouloir maigrir sans jamais savoir ce que tu
-manges, écris-nous sur WhatsApp. Le bouton est juste en bas." Il doit faire des mouvements
-des mains pour illustrer ses propos, et montrer le bas de l'écran avec sa main à la fin.
+Il se filme avec son téléphone et dit, mot pour mot, sans rien ajouter :
+"Si tu es fatigué de vouloir maigrir sans jamais savoir ce que tu manges, écris-nous sur
+WhatsApp. Le bouton est juste en bas."
+
+VOIX — à garder identique dans les deux parties de cet avatar : voix d'homme camerounais
+de 30 ans, timbre médium et franc, accent de Douala, ton énergique et amical, sans
+jamais crier.
+
+DÉBIT — régulier du début à la fin, environ 3 mots par seconde. Aucune accélération,
+aucun ralentissement, aucune pause de plus d'une demi-seconde. Il commence à parler dès
+la première image et termine sa phrase avant la dernière : pas de silence au début, pas
+de silence à la fin.
+
+JEU — Il doit faire des mouvements des mains pour illustrer ses propos, et montrer le
+bas de l'écran avec sa main à la fin. Même énergie, même volume et même distance au
+visage du début à la fin.
+
+INTERDIT — musique, bruit de fond, deuxième voix, sous-titres ou texte incrusté à
+l'image, changement de plan, de décor ou de vêtement.
 ```
 
 ### Partie 2
@@ -211,9 +342,26 @@ qu'il y a vraiment dans ton assiette. »
 
 **Prompt Flow — partie 2** (fonction « Prolonger »)
 ```
-Ce monsieur doit dire : "On t'installe Calbasse, et dès ce soir tu photographies ton ndolé.
-Tu vas enfin voir ce qu'il y a vraiment dans ton assiette." Il doit faire des mouvements
-des mains pour illustrer ses propos et terminer avec un sourire assuré.
+Prolonge exactement la même vidéo, sans coupure et sans changer de plan. La même
+personne continue et dit, mot pour mot, sans rien ajouter :
+"On t'installe Calbasse, et dès ce soir tu photographies ton ndolé. Tu vas enfin voir ce
+qu'il y a vraiment dans ton assiette."
+
+VOIX — exactement la même que dans la partie précédente, ne pas en changer, ni le
+timbre, ni la hauteur, ni l'accent : voix d'homme camerounais de 30 ans, timbre médium
+et franc, accent de Douala, ton énergique et amical, sans jamais crier.
+
+DÉBIT — exactement le même que dans la partie précédente : régulier, environ 3 mots par
+seconde, aucune accélération, aucun ralentissement, aucune pause de plus d'une
+demi-seconde. Il enchaîne tout de suite, sans silence au début, et termine sa phrase
+avant la dernière image.
+
+JEU — Il doit faire des mouvements des mains pour illustrer ses propos et terminer avec
+un sourire assuré. Même énergie, même volume et même distance au visage que dans la
+partie 1.
+
+INTERDIT — musique, bruit de fond, deuxième voix, sous-titres ou texte incrusté à
+l'image, changement de plan, de décor ou de vêtement.
 ```
 
 ---
@@ -233,6 +381,9 @@ Remplace uniquement la première phrase de l'UGC 01, garde tout le reste.
 ## Contrôle avant diffusion
 
 - [ ] Les 4 avatars sont 4 visages nettement différents
+- [ ] Dans chaque UGC, la partie 1 et la partie 2 ont la même voix (écoutées à la suite)
+- [ ] Même débit partout : aucune partie nettement plus lente ou plus rapide
+- [ ] Aucun long silence au début, à la fin ou au milieu d'une phrase
 - [ ] Aucun avatar ne montre le problème : tous incarnent la situation désirée
 - [ ] Chaque partie fait moins de 60 mots
 - [ ] Les 3 témoignages ont profil, problème et transformation différents

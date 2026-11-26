@@ -42,10 +42,29 @@ Pour chaque UGC :
 1. Charge l'image de l'avatar dans Flow.
 2. Colle le **Prompt Flow — partie 1**. Génère.
 3. Sur la vidéo obtenue, clique **Prolonger**, colle le **Prompt Flow — partie 2**. Génère.
-4. Télécharge la vidéo complète.
+4. Écoute les deux parties à la suite, puis télécharge.
 
-Prolonger, plutôt que générer une deuxième vidéo à part : c'est ce qui garde la même voix
-et le même visage d'un bout à l'autre.
+Prolonger, plutôt que générer une deuxième vidéo à part : c'est ce qui garde le mieux la
+même voix et le même visage d'un bout à l'autre.
+
+> **La voix doit être la même dans les deux parties d'un avatar.** Flow en change dès qu'il
+> le peut : c'est le défaut le plus visible de la première production. Les prompts décrivent
+> maintenant la voix (timbre, hauteur, accent, ton) et le débit, mot pour mot identiques dans
+> la partie 1 et la partie 2 — ne jamais raccourcir ces blocs en les collant, c'est eux qui
+> tiennent la voix.
+
+**Écouter les deux parties à la suite avant de télécharger.** Trois questions :
+
+1. Est-ce la même personne qui parle ? Si le timbre ou la hauteur change, régénérer la
+   partie 2 (« Prolonger » à nouveau) sans rien modifier au prompt : chaque génération tire
+   une voix, il en faut parfois deux ou trois pour tomber juste.
+2. Le débit est-il le même ? Si une partie est nettement plus lente ou plus rapide, la
+   régénérer : le montage rattrape un petit écart, pas un grand.
+3. Y a-t-il un long silence au début, à la fin, ou au milieu d'une phrase ? Les silences
+   créent des à-coups de rythme. Régénérer plutôt que de couper.
+
+Une partie qui demande trois générations reste moins chère qu'une publicité où l'on entend
+deux personnes différentes jouer le même témoignage.
 
 **3. L'assemblage (CapCut, ou `montage/assembler.py` qui le fait automatiquement)**
 - Mets les 4 vidéos bout à bout, dans l'ordre 01 → 02 → 03 → 04.
@@ -84,8 +103,12 @@ Huit rushs reçus, trois enseignements :
    ils se prononcent : « atchéké » pour l'attiéké (prononciation ivoirienne), « ndolé » sans le N
    initial est déjà ce que l'IA dit.
 5. **La vitesse de parole varie beaucoup d'un clip à l'autre** (de 2,9 à 6,2 syllabes par seconde sur
-   un même avatar, à cause des pauses). Le montage la ramène à un rythme unique, mais plus les
-   rushs sont proches, moins il faut étirer.
+   un même avatar, à cause des pauses). Le montage la ramène à un rythme unique, mais seulement
+   dans une fourchette : un clip trop lent reste plus lent que les autres. Plus les rushs sont
+   proches, moins il faut étirer.
+6. **La voix change entre la partie 1 et la partie 2 d'un même avatar.** C'est ce qui s'entend le
+   plus. Les prompts décrivent désormais la voix et le débit à l'identique dans les deux parties ;
+   si Flow en change quand même, régénérer la partie 2.
 
 Le montage est automatisé : voir `montage/README.md`.
 
