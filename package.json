@@ -6,11 +6,11 @@
     "@expo-google-fonts/plus-jakarta-sans": "^0.4.2",
     "@react-native-async-storage/async-storage": "2.2.0",
     "expo": "~58.0.25",
+    "expo-build-properties": "~58.0.12",
     "expo-camera": "~58.0.14",
     "expo-constants": "~58.0.16",
     "expo-file-system": "~58.0.13",
     "expo-font": "~58.0.12",
-    "expo-haptics": "~58.0.8",
     "expo-image-manipulator": "~58.0.16",
     "expo-image-picker": "~58.0.10",
     "expo-linking": "~58.0.17",
@@ -39,8 +39,8 @@
   },
   "scripts": {
     "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
+    "android": "expo run:android",
+    "ios": "expo run:ios",
     "web": "expo start --web",
     "typecheck": "tsc --noEmit",
     "test": "node --test --experimental-strip-types src/lib/*.test.ts scripts/*.test.mjs",
@@ -56,5 +56,18 @@
     "installation": "node scripts/preparer-installation.mjs",
     "verifier:projet": "node scripts/verifier-projet.mjs"
   },
-  "private": true
+  "private": true,
+  "expo": {
+    "autolinking": {
+      "android": {
+        "exclude": [
+          "react-native-reanimated",
+          "react-native-worklets"
+        ],
+        "buildFromSource": [
+          "expo-camera"
+        ]
+      }
+    }
+  }
 }
