@@ -42,6 +42,13 @@ de voix, pauses exclues) et on calcule la vitesse qui le ramène à la cadence c
 (`cadence_syllabes_par_s`, 6,1 par défaut), dans une fourchette de 0,90× à 1,50×. Les pauses sont
 accélérées 1,8 fois. Résultat : tous les clips parlent au même rythme, et la vidéo est plus courte.
 
+`vitesse_par_avatar` (vrai par défaut) donne **une seule vitesse aux deux parties d'un même avatar** :
+elle est calculée sur ses deux parties réunies. L'avatar garde alors le même rythme à l'image, mais si
+l'IA a dit une partie vite et l'autre lentement, l'écart reste à l'oreille. À `false`, chaque clip est
+ramené exactement à la cadence cible : la parole est parfaitement régulière, mais un avatar peut passer
+du ralenti à l'accéléré d'une partie à l'autre. Le vrai remède est en amont : **des textes de même
+longueur en syllabes dans les deux parties** (viser 30 syllabes, soit une vingtaine de mots).
+
 Deux réglages évitent les à-coups de rythme, le défaut le plus visible de la première version :
 
 - **La fourchette doit être assez large** pour qu'aucun clip ne la touche. Un clip qui plafonne à

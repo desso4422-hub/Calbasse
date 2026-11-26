@@ -139,27 +139,46 @@ def main(cfg_path, extrait=None):
     cible = cfg.get("cadence_syllabes_par_s", 6.1)
     vmin, vmax = cfg.get("vitesse_min", 0.95), cfg.get("vitesse_max", 1.35)
     v_pause = cfg.get("vitesse_pause", 3.0)
+    # Une seule vitesse par avatar : ses deux parties gardent le même rythme, à l'image comme à l'oreille.
+    # Une vitesse par clip égalise mieux la cadence de parole, mais fait passer un avatar du ralenti à l'accéléré.
+    par_avatar = cfg.get("vitesse_par_avatar", True)
     cible_lufs = cfg.get("cible_morceau_lufs", -21.0)
 
-    # ——— 1. Chaque clip : voix, vitesse, carte de temps, minutage des mots ———
-    infos, decalage = [], 0.0
+    # ——— 1a. Mesure de chaque clip : tranches de voix, durée de voix, syllabes ———
+    mesures = []
     for i, c in enumerate(cfg["clips"]):
         src = (base / c["fichier"]).resolve()
         sr, x = P.audio_mono(src, tmp / (src.stem + ".wav"))
         debut, fin = c.get("debut", 0.0), min(c.get("fin", P.duree_media(src)), P.duree_media(src))
         tranches, voix = P.analyser_voix(x, sr, debut, fin)
         tous = c["texte"].split(" ")      # espace ordinaire seulement : « toi ? » garde son espace insécable
+        mesures.append(dict(cfg=c, src=src, sr=sr, x=x, debut=debut, fin=fin, tranches=tranches, voix=voix,
+                            tous=tous, syl=sum(P.syllabes(m.lstrip("~")) for m in tous), ugc=c.get("ugc", i // 2 + 1)))
+
+    # ——— 1b. La vitesse : celle qui amène l'avatar (ou le clip seul) à la cadence cible ———
+    sommes = {}
+    for k, m in enumerate(mesures):
+        cle = m["ugc"] if par_avatar else k
+        s_syl, s_voix = sommes.get(cle, (0.0, 0.0))
+        sommes[cle] = (s_syl + m["syl"], s_voix + m["voix"])
+    vitesses = {cle: min(vmax, max(vmin, cible / (s / v))) for cle, (s, v) in sommes.items()}
+
+    # ——— 1c. Carte de temps et minutage des mots ———
+    infos, decalage = [], 0.0
+    for k, m in enumerate(mesures):
+        c, sr, x = m["cfg"], m["sr"], m["x"]
+        tous, debut, fin = m["tous"], m["debut"], m["fin"]
         # Un mot préfixé de ~ est dit mais pas affiché (mot que l'IA ajoute et qu'on ne sait pas écrire) :
         # il compte pour le calage, ce qui évite de décaler les sous-titres qui suivent.
-        mots = [m for m in tous if not m.startswith("~")]
-        cadence = sum(P.syllabes(m.lstrip("~")) for m in tous) / voix
-        vitesse = min(vmax, max(vmin, cible / cadence))
-        carte, n = P.carte_temps(tranches, vitesse, v_pause)
-        t_tous = P.minutage_mots([m.lstrip("~") for m in tous], x, sr, debut, fin)
-        t_src = [t_tous[i] for i, m in enumerate(tous) if not m.startswith("~")] + [t_tous[-1]]
+        mots = [w for w in tous if not w.startswith("~")]
+        cadence = m["syl"] / m["voix"]
+        vitesse = vitesses[m["ugc"] if par_avatar else k]
+        carte, n = P.carte_temps(m["tranches"], vitesse, v_pause)
+        t_tous = P.minutage_mots([w.lstrip("~") for w in tous], x, sr, debut, fin)
+        t_src = [t_tous[i] for i, w in enumerate(tous) if not w.startswith("~")] + [t_tous[-1]]
         t_mots = [P.src_vers_sortie(t, carte) for t in t_src]
-        infos.append(dict(cfg=c, src=str(src), debut=debut, fin=fin, carte=carte, n=n, mots=mots, t_mots=t_mots, vitesse=vitesse, cadence=cadence,
-                          decalage=decalage, lufs=P.loudness(src), ugc=c.get("ugc", i // 2 + 1)))
+        infos.append(dict(cfg=c, src=str(m["src"]), debut=debut, fin=fin, carte=carte, n=n, mots=mots, t_mots=t_mots,
+                          vitesse=vitesse, cadence=cadence, decalage=decalage, lufs=P.loudness(m["src"]), ugc=m["ugc"]))
         decalage += n / FPS
     duree_totale = decalage
 

@@ -1,10 +1,10 @@
 {
-  "sortie": "calbasse-prise-de-masse-v2.mp4",
+  "sortie": "calbasse-prise-de-masse-v3.mp4",
   "police_dossier": "police",
   "temp": "/tmp/claude-0/-home-user-Calbasse/f8ce0a80-532c-5a90-811b-6edf5f24d622/scratchpad/montage_tmp2",
   "cadence_syllabes_par_s": 6.0,
-  "vitesse_min": 0.8,
-  "vitesse_max": 1.65,
+  "vitesse_min": 0.9,
+  "vitesse_max": 1.5,
   "vitesse_pause": 1.8,
   "cible_morceau_lufs": -21.0,
   "crf": 20,
@@ -247,5 +247,6 @@
       "fin": 7.93,
       "texte": "On t'installe Calbasse, tu photographies ton piron ce soir, et tu sauras exactement ce que tu manges."
     }
-  ]
+  ],
+  "vitesse_par_avatar": true
 }

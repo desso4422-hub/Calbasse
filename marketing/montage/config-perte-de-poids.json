@@ -1,5 +1,5 @@
 {
-  "sortie": "calbasse-perte-de-poids-v4.mp4",
+  "sortie": "calbasse-perte-de-poids-v5.mp4",
   "police_dossier": "police",
   "temp": "/tmp/claude-0/-home-user-Calbasse/f8ce0a80-532c-5a90-811b-6edf5f24d622/scratchpad/montage_tmp",
   "cadence_syllabes_par_s": 6.1,
@@ -164,5 +164,6 @@
       "fin": 7.93,
       "texte": "On t'installe Calbasse, et dès ce soir tu photographies ton ndolé. Tu vas enfin voir ce qu'il y a vraiment dans ton assiette."
     }
-  ]
+  ],
+  "vitesse_par_avatar": true
 }
