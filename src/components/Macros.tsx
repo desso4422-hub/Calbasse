@@ -27,11 +27,34 @@ function Barre({ progression, couleur, piste }: { progression: number; couleur: 
  * `cibles` : affiche aussi l'objectif du jour et une barre par nutriment.
  * `ton` : « sombre » sur les cartes couleur encre.
  */
-export function Macros({ n, cibles, ton = 'clair' }: { n: Nutriments; cibles?: Nutriments; ton?: 'clair' | 'sombre' }) {
+export function Macros({ n, cibles, ton = 'clair', disposition = 'ligne' }: { n: Nutriments; cibles?: Nutriments; ton?: 'clair' | 'sombre'; disposition?: 'ligne' | 'colonne' }) {
   const sombre = ton === 'sombre';
   const etiquette = sombre ? couleurs.sableClair : couleurs.encre2;
   const valeur = sombre ? couleurs.sable : couleurs.encre;
   const piste = sombre ? '#4A3322' : couleurs.piste;
+  // « colonne » : les trois nutriments l'un sous l'autre (cartes étroites, comme l'écran d'accueil sur petit téléphone)
+  if (disposition === 'colonne') {
+    return (
+      <View style={{ gap: 12 }}>
+        {MACROS.map((m) => (
+          <View key={m.cle} style={{ gap: 4 }} accessible accessibilityLabel={`${m.nom} ${n[m.cle]} grammes${cibles ? ` sur ${cibles[m.cle]} grammes` : ''}`}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', gap: 6 }}>
+              <T g={700} taille={13} couleur={etiquette} numberOfLines={1} style={{ flexShrink: 1 }}>
+                {m.nom}
+              </T>
+              <T g={800} taille={15} couleur={valeur} numberOfLines={1}>
+                {n[m.cle]}
+                <T g={700} taille={12} couleur={etiquette}>
+                  {cibles ? ` / ${cibles[m.cle]} g` : ' g'}
+                </T>
+              </T>
+            </View>
+            {cibles ? <Barre progression={cibles[m.cle] ? n[m.cle] / cibles[m.cle] : 0} couleur={sombre ? couleurs.peche : m.couleur} piste={piste} /> : null}
+          </View>
+        ))}
+      </View>
+    );
+  }
   return (
     <View style={{ flexDirection: 'row', gap: 10 }}>
       {MACROS.map((m) => (

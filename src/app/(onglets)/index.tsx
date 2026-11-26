@@ -154,7 +154,7 @@ export default function Aujourdhui() {
             </View>
           </View>
           <View style={{ flex: 1, minWidth: 0 }}>
-            <Macros n={total} cibles={cibles} />
+            <Macros n={total} cibles={cibles} disposition="colonne" />
           </View>
         </View>
       </View>
