@@ -54,7 +54,8 @@
     "eas-build-pre-install": "node scripts/verifier-production.mjs",
     "test:integration": "node --test supabase/tests/integration/*.test.mjs",
     "installation": "node scripts/preparer-installation.mjs",
-    "verifier:projet": "node scripts/verifier-projet.mjs"
+    "verifier:projet": "node scripts/verifier-projet.mjs",
+    "deployer:pwa": "scripts/deployer-pwa.sh"
   },
   "private": true,
   "expo": {
