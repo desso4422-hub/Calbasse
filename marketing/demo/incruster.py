@@ -157,7 +157,7 @@ def incruster(cfg, ecrans, tmp):
             m = cv2.GaussianBlur(m.astype(np.float32), (5, 5), 0)[..., None]
             f = (gauchi * m + f * (1 - m)).astype(np.uint8)
         sorties.append(f)
-    return sorties
+    return sorties, quads, debut
 
 
 def ecrire(frames, chemin, taille):
@@ -172,7 +172,7 @@ def ecrire(frames, chemin, taille):
     tmp.rmdir()
 
 
-def texte_sur(img, texte, taille=64):
+def texte_sur(img, texte, taille=64, bas=False):
     """Texte blanc cerné de noir, en haut de l'image, comme dans les publicités d'app."""
     d = ImageDraw.Draw(img)
     f = police("PlusJakartaSans_800ExtraBold.ttf", taille)
@@ -185,13 +185,51 @@ def texte_sur(img, texte, taille=64):
         else:
             courante = essai
     lignes.append(courante)
-    y = 250
+    y = HAUTEUR - 220 - int(taille * 1.25) * (len(lignes) - 1) if bas else 250
     for ligne in lignes:
         b = d.textbbox((0, 0), ligne, font=f)
         x = (LARGEUR - (b[2] - b[0])) // 2
         d.text((x, y), ligne, font=f, fill=(255, 255, 255), stroke_width=6, stroke_fill=(0, 0, 0))
         y += int(taille * 1.25)
     return img
+
+
+def rapprocher(frames, quads, debut, cfg):
+    """Quand le résultat s'affiche, la caméra se rapproche du téléphone et le plan ralentit,
+    le temps de lire les calories."""
+    i_res = debut + int((cfg["duree_cadrage"] + cfg["duree_envoi"]) * FPS)
+    zmax, monte, lent = cfg.get("zoom_final", 2.1), cfg.get("duree_zoom", 1.3), cfg.get("ralenti", 0.55)
+    h, w = frames[0].shape[:2]
+
+    # dernier centre connu de l'écran, pour viser le téléphone
+    def centre(i):
+        for j in range(i, -1, -1):
+            if quads[j] is not None:
+                return quads[j].mean(axis=0)
+        return np.array([w / 2, h / 2], np.float32)
+
+    sortie, source, t_res = [], 0.0, 0.0
+    while source < len(frames) - 1:
+        i = int(source)
+        if i < i_res:
+            z, cx, cy = 1.0, w / 2, h / 2
+        else:
+            p = min(1.0, t_res / monte)
+            p = p * p * (3 - 2 * p)                       # démarrage et arrivée en douceur
+            z = 1 + (zmax - 1) * p
+            c = centre(i)
+            cx = w / 2 + (float(c[0]) - w / 2) * p
+            cy = h / 2 + (float(c[1]) - h / 2) * p
+            t_res += 1 / FPS
+        f = frames[i]
+        if z > 1.001:
+            cw, ch = w / z, h / z
+            x = min(max(cx - cw / 2, 0), w - cw)
+            y = min(max(cy - ch / 2, 0), h - ch)
+            f = cv2.resize(f[int(y):int(y + ch), int(x):int(x + cw)], (w, h), interpolation=cv2.INTER_LANCZOS4)
+        sortie.append(f)
+        source += 1.0 if i < i_res else lent
+    return sortie
 
 
 def queue(cfg):
@@ -230,17 +268,20 @@ def main(cfg_path):
     ecrans = construire_ecran(cfg, base)
     print(f"  {len(ecrans)} images ({len(ecrans) / FPS:.1f} s)")
     print("Incrustation dans l'écran vert…")
-    frames = incruster(cfg, ecrans, base)
+    frames, quads, debut = incruster(cfg, ecrans, base)
     frames = [cv2.resize(f, (LARGEUR, HAUTEUR), interpolation=cv2.INTER_LANCZOS4) for f in frames]
-    print("Plan final…")
-    frames += queue(cfg)
+    e = LARGEUR / frames[0].shape[1] if False else 1.0
+    ech = LARGEUR / cv2.VideoCapture(cfg["flow"]).read()[1].shape[1]
+    quads = [None if q is None else q * ech for q in quads]
+    print("Rapprochement sur le téléphone…")
+    frames = rapprocher(frames, quads, debut, cfg)
     print("Textes…")
     for i, f in enumerate(frames):
         t = i / FPS
         for bloc in cfg.get("textes", []):
             if bloc["de"] <= t < bloc["a"]:
                 img = Image.fromarray(cv2.cvtColor(f, cv2.COLOR_BGR2RGB))
-                frames[i] = cv2.cvtColor(np.array(texte_sur(img, bloc["texte"])), cv2.COLOR_RGB2BGR)
+                frames[i] = cv2.cvtColor(np.array(texte_sur(img, bloc["texte"], bas=bloc.get("bas", False))), cv2.COLOR_RGB2BGR)
     sortie = str((base / cfg["sortie"]).resolve())
     muet = sortie.replace(".mp4", "-muet.mp4")
     ecrire(frames, muet, (LARGEUR, HAUTEUR))

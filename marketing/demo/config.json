@@ -13,7 +13,7 @@
   "t_resultat": 15.0,
   "duree_cadrage": 1.4,
   "duree_envoi": 1.0,
-  "duree_resultat": 2.4,
+  "duree_resultat": 4.2,
   "t_final": 21.0,
   "duree_finale": 3.0,
   "textes": [
@@ -24,13 +24,17 @@
     },
     {
       "de": 3.1,
-      "a": 7.9,
+      "a": 5.9,
       "texte": "Prends juste la photo"
     },
     {
-      "de": 8.0,
-      "a": 11.0,
-      "texte": "Calbasse te dit tout"
+      "de": 7.2,
+      "a": 99,
+      "texte": "Calbasse te dit tout",
+      "bas": true
     }
-  ]
+  ],
+  "zoom_final": 1.7,
+  "duree_zoom": 1.3,
+  "ralenti": 0.55
 }
