@@ -54,3 +54,8 @@ marketing/montage/__pycache__/
 apk/
 *.keystore
 !android/app/debug.keystore
+
+# Démonstrations : les rushs et les exports ne sont pas versionnés
+marketing/demo/*.mp4
+marketing/demo/*.jpg
+marketing/demo/*.png
